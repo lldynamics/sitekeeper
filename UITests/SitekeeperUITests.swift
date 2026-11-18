@@ -80,7 +80,7 @@ extension SitekeeperUITests {
         XCTAssertTrue(app.buttons["录制语音"].exists)
         if !app.buttons["从相册添加媒体"].isHittable {
             let more = app.buttons["quick-note-more-tools"]
-            XCTAssertTrue(more.waitForExistence(timeout: 5))
+            XCTAssertTrue(more.waitForExistence(timeout: 5), app.debugDescription)
             more.tap()
         }
         XCTAssertTrue(app.buttons["从相册添加媒体"].waitForExistence(timeout: 5))
@@ -89,13 +89,13 @@ extension SitekeeperUITests {
     }
 
     func testQuickNoteCompactComposerCanOpenDrawingBoard() {
-        let app = launchApp()
+        let app = launchApp(resetState: true)
         tapPrimaryModule(app, name: "随手记")
 
         let drawingButton = app.buttons["quick-note-add-drawing"]
         if !drawingButton.isHittable {
             let more = app.buttons["quick-note-more-tools"]
-            XCTAssertTrue(more.waitForExistence(timeout: 5))
+            XCTAssertTrue(more.waitForExistence(timeout: 5), app.debugDescription)
             more.tap()
         }
         XCTAssertTrue(drawingButton.waitForExistence(timeout: 5))

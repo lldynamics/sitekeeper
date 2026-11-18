@@ -5,6 +5,39 @@ import UIKit
 
 @MainActor
 struct ProjectPreDeliveryInspectionExportTests {
+    @Test func standaloneInspectionTSVProtectsUntrustedObjectAndOwnerFields() {
+        let project = Project(name: "=1+1", location: "")
+        let todo = SiteTodo(
+            title: "\t@SUM(A1:A2)", owner: "+SUM(1,2)", dueDate: .empty,
+            priority: .high, issueType: .quality, projectId: project.id
+        )
+        let payload = ProjectDetailExportWorkflow.makePreDeliveryInspectionPayload(
+            project: project, financialRecords: [], documents: [], drawings: [], todos: [todo],
+            logs: [], quickNotes: [],
+            backupState: ReportBuilder.ProjectDeliveryPackageBackupState(
+                latestBackupDate: nil, reminderDays: 7, referenceDate: Date()
+            )
+        )
+        let text = String(decoding: payload.data, as: UTF8.self)
+        #expect(text.contains("\t' @SUM(A1:A2)\t'+SUM(1,2)\t"))
+        #expect(text.contains("\t'=1+1\t"))
+    }
+
+    @Test func preDeliveryInspectionListsBothMissingRectificationStagesForCompletedTodo() throws {
+        let project = Project(name: "Missing rectification", location: "")
+        let todo = SiteTodo(
+            title: "Completed repair",
+            rectificationBeforePhotoFileName: "missing-before-\(UUID().uuidString).jpg",
+            rectificationAfterPhotoFileName: "missing-after-\(UUID().uuidString).jpg", isDone: true
+        )
+        let rows = ReportBuilder.projectPreDeliveryInspectionRows(
+            project: project, financialRecords: [], documents: [], drawings: [], todos: [todo], logs: [], quickNotes: []
+        ).filter { $0.checkKey == "missing_rectification_original" }
+        #expect(rows.count == 2)
+        #expect(rows.allSatisfy { $0.objectId == todo.id.uuidString && $0.severity == "blocker" && $0.statusRaw == "failed" })
+        #expect(rows.map(\.fileName) == [try #require(todo.rectificationBeforePhotoFileName), try #require(todo.rectificationAfterPhotoFileName)])
+    }
+
     @Test func preDeliveryInspectionTSVListsActionableIssues() throws {
         let project = Project(name: "交付体检", location: "工地", status: .active)
         let missingDrawing = ProjectDrawing(

@@ -169,7 +169,9 @@ private struct WatermarkDraftZoomView: View {
             WatermarkDraftImageView(photo: photo, maxPixelSize: 2400)
                 .scaleEffect(scale).offset(offset)
                 .gesture(MagnifyGesture().onChanged { value in scale = min(5, max(1, settledScale * value.magnification)) }
-                    .onEnded { _ in settledScale = scale; if scale == 1 { offset = .zero; settledOffset = .zero } })
+                    .onEnded { _ in settledScale = scale
+                    if scale == 1 { offset = .zero
+                    settledOffset = .zero } })
                 .simultaneousGesture(DragGesture().onChanged { value in
                     guard scale > 1 else { return }
                     offset = CGSize(width: settledOffset.width + value.translation.width, height: settledOffset.height + value.translation.height)

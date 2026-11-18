@@ -16,8 +16,6 @@
 "今日工作台" = "Today's Dashboard";
 "今日关注工程" = "Active Projects";
 "当前：" = "Current: ";
-"选择工程后，快捷记录会自动带入项目" = "After selecting a project, quick records auto-populate the project";
-"按风险排序" = "Sort by Risk";
 "设为当前工程" = "Set as Current Project";
 "写日志" = "Write Log";
 "加待办" = "Add To-do";
@@ -28,7 +26,6 @@
 "暂无进行中工程" = "No Active Projects";
 "去添加" = "Add One";
 "选择工程后直接进入项目记账" = "Enter project accounting directly after selection";
-"请选择工程" = "Please Select a Project";
 "选择当前工程" = "Select Current Project";
 "关闭" = "Close";
 "取消" = "Cancel";
@@ -49,34 +46,19 @@
 "公制单位" = "Metric Units";
 "主题" = "Theme";
 "语言" = "Language";
-"已关闭实时自动保存。为降低意外丢失风险，应用退到后台时仍会自动保存一次" = "Auto-save disabled. To prevent data loss, the app will still save once when entering background.";
-"报价单公司信息" = "Quotation Company Info";
 "公司名称" = "Company Name";
 "公司电话" = "Company Phone";
 "公司地址" = "Company Address";
-"报价有效期" = "Quote Validity";
 "天" = "days";
-"未填写的字段会在导出报价单前提示补全" = "Unfilled fields will be prompted before export";
 "数据管理" = "Data Management";
-"清空本机全部数据（不可恢复）" = "Clear All Local Data (Irreversible)";
 "将删除本机所有项目、附件与导入文件，不会影响你已导出的备份 ZIP" = "Will delete all local projects, attachments, and imported files. Exported ZIP backups will not be affected.";
 "正在清空本机数据，请稍候..." = "Clearing local data, please wait...";
-"使用提示" = "Usage Tips";
-"重新显示使用提示" = "Reset Usage Tips";
-"会重新显示备份页和项目文件页的新手提示" = "Will re-display the getting-started tips on backup and project files pages.";
 "计算器" = "Calculator";
-"管理收藏计算器" = "Manage Favorite Calculators";
 "关于" = "About";
 "版本" = "Version";
-"即将清空本机数据" = "About to Clear Local Data";
-"此操作会删除本机全部项目数据与附件文件，且无法恢复。建议先在「数据备份」里导出 ZIP" = "This will delete all local project data and attachment files, irreversible. We recommend exporting a ZIP in Data Backup first.";
-"收藏计算器" = "Favorite Calculators";
 "即将清空本机全部数据" = "About to Clear All Local Data";
-"所有项目、日志、报价、材料与附件文件将被永久删除" = "All projects, logs, quotations, materials, and attachment files will be permanently deleted.";
 "确认清空" = "Confirm Clear";
 "确认删除数据" = "CONFIRM DELETE DATA";
-"已重置。下次进入相关页面会再次显示使用提示。" = "Reset. Tips will show again the next time you visit the relevant pages.";
-"数据备份" = "Data Backup";
 "隐私政策" = "Privacy Policy";
 "意见反馈" = "Feedback";
 "跟随系统" = "Follow System";
@@ -89,11 +71,8 @@
 "数据安全" = "Data Safety";
 "系统" = "System";
 "更多设置" = "More Settings";
-"导出、备份、导入恢复、体检与清理" = "Export, backup, restore, health checks, and cleanup";
 "编辑用户名" = "Edit Username";
 "未设置用户名" = "Username Not Set";
-"尚未记录云备份成功" = "No successful cloud backup recorded yet";
-"最近云备份：%@" = "Latest cloud backup: %@";
 "%@ 个文件" = "%@ files";
 "备份与存储" = "Backup & Storage";
 "本机占用：%@" = "Local usage: %@";
@@ -128,7 +107,6 @@
 "记录班组、工时、单价和结算状态。" = "Track crew, hours, rates, and settlement status.";
 "结算" = "Settlement";
 "没有匹配人工" = "No matching labor records";
-"%@ 人 · %@h" = "%@ people · %@h";
 "单价 %@" = "Rate %@";
 "金额 %@" = "Amount %@";
 "还没有进度任务" = "No progress tasks yet";
@@ -136,16 +114,11 @@
 "还没有现场照片" = "No site photos yet";
 "日志或待办里的照片会汇总到这里。" = "Photos from logs or to-dos appear here.";
 "还没有图纸" = "No drawings yet";
-"可上传 DWG、DXF、PDF；当前版本可下载原图查看。" = "Upload DWG, DXF, or PDF; current versions keep the original file available.";
 "导图纸" = "Import Drawing";
 "没有匹配图纸" = "No matching drawings";
 "历史版本 (%lld)" = "History (%lld)";
 "历史版" = "Historical";
-"文字：%@ / %@" = "Text: %@ / %@";
 "查看版本时间线" = "View Version Timeline";
-"图纸原件可外部打开" = "Drawing originals open externally";
-"PDF 附件" = "PDF attachment";
-"DWG/DXF 外部专业看图" = "DWG/DXF external professional viewer";
 "文件独立打开" = "Open as standalone file";
 "随手记录" = "Quick note";
 "可追加媒体、拍照、手绘或 PDF/DWG/DXF/文档附件" = "Add media, camera photos, sketches, or PDF/DWG/DXF/document attachments";
@@ -177,7 +150,6 @@
 "线管穿线率" = "Conduit Fill Rate";
 "地砖排料" = "Tile Layout";
 "钢筋重量" = "Rebar Weight";
-"照明估算" = "Lighting Estimate";
 "混凝土算量" = "Concrete Volume";
 "单位换算" = "Unit Conversion";
 "桥架填充率" = "Cable Tray Fill Rate";
@@ -192,62 +164,32 @@
 "选填" = "Optional";
 "换算" = "Convert";
 "未选择" = "Not Selected";
-"线管内径 (mm)" = "Conduit Inner Diameter (mm)";
-"单根导线外径 (mm)" = "Single Wire Outer Diameter (mm)";
 "导线根数" = "Number of Wires";
 "规范要求穿线率 ≤ 40%" = "Code requires fill rate ≤ 40%";
-"长度 (m)" = "Length (m)";
-"宽度 (m)" = "Width (m)";
-"长度 (mm)" = "Length (mm)";
-"宽度 (mm)" = "Width (mm)";
-"损耗 (%)" = "Waste (%)";
 "每箱片数" = "Tiles per Box";
-"直径 (mm)" = "Diameter (mm)";
-"每根长 (m)" = "Length per Bar (m)";
 "根数" = "Quantity";
-"单价 (元/kg)" = "Unit Price (¥/kg)";
-"目标照度 (lux)" = "Target Illuminance (lux)";
-"单灯光通量 (lm)" = "Single Lamp Lumens (lm)";
-"利用系数" = "Utilization Factor";
-"维护系数" = "Maintenance Factor";
-"厚度 (cm)" = "Thickness (cm)";
 "数值" = "Value";
 "宽" = "Width";
 "高" = "Height";
 "根" = "pcs";
-"功率 (kW)" = "Power (kW)";
-"电压 (V)" = "Voltage (V)";
 "功率因数" = "Power Factor";
-"电压预设:" = "Voltage Presets:";
-"功率因数:" = "Power Factor:";
-"计算电流 (A)" = "Calculated Current (A)";
-"电流 (A)" = "Current (A)";
 "铜" = "Copper";
 "铝" = "Aluminum";
-"截面积 (mm²)" = "Cross-section (mm²)";
-"额定电压 (V)" = "Rated Voltage (V)";
-"层高 (m)" = "Floor Height (m)";
 "门总面积" = "Total Door Area";
 "窗总面积" = "Total Window Area";
 "墙 1 长" = "Wall 1 Length";
 "墙 2 长" = "Wall 2 Length";
 "墙 3 长" = "Wall 3 Length";
 "墙 4 长" = "Wall 4 Length";
-"输入校验提示" = "Input validation hint";
 "双击切换" = "Double tap to switch";
 "明细" = "Details";
 "公式" = "Formula";
 "公式: %@" = "Formula: %@";
 "保存失败" = "Save Failed";
 "保存到项目" = "Save to Project";
-"绑定计算历史" = "Bind Calculation History";
-"生成材料单" = "Create Material Sheet";
 "生成报价项" = "Create Quote Item";
 "保存到项目资料" = "Save to Project Documents";
 "保存到随手记" = "Save to Quick Note";
-"保存到施工日志" = "Save to Daily Log";
-"将计算结果写入项目资料、随手记或施工日志" = "Save calculation results to project documents, quick notes, or daily logs";
-"将计算结果写入项目资料、随手记、施工日志、材料单、报价项或项目历史" = "Save calculation results to project documents, quick notes, daily logs, material sheets, quote items, or project history";
 "已复制" = "Copied";
 "已复制结果" = "Result Copied";
 "将计算结果复制到剪贴板" = "Copy calculation results to the clipboard";
@@ -260,8 +202,6 @@
 "已保存到 %@ 的项目资料" = "Saved to %@ project documents";
 "已保存到 %@ 的随手记" = "Saved to %@ quick note";
 "已保存到 %@ 的施工日志" = "Saved to %@ daily log";
-"已保存到 %@ 的项目历史" = "Saved to %@ project history";
-"已生成 %@ 的材料单" = "Created %@ material sheet";
 "已生成 %@ 的报价项" = "Created %@ quote item";
 "打开项目" = "Open Project";
 "打开现场" = "Open Site";
@@ -270,109 +210,41 @@
 "关注" = "Needs Attention";
 "不通过" = "Failed";
 "墙面尺寸 (m)" = "Wall Dimensions (m)";
-"墙 1 长 (m)" = "Wall 1 Length (m)";
-"墙 2 长 (m)" = "Wall 2 Length (m)";
-"墙 3 长 (m)" = "Wall 3 Length (m)";
-"墙 4 长 (m)" = "Wall 4 Length (m)";
 "层高预设" = "Height Presets";
 "扣除面积 (m²)" = "Deduction Area (m²)";
-"门总面积 (m²)" = "Total Door Area (m²)";
-"窗总面积 (m²)" = "Total Window Area (m²)";
 "墙面面积结果" = "Wall Area Result";
 "净面积" = "Net Area";
-"净面积 %@ m²" = "Net Area %@ m²";
-"净面积 = (墙体总周长×层高) - 门窗总面积" = "Net area = (total wall perimeter x height) - total door and window area";
 "周长" = "Perimeter";
 "毛面积" = "Gross Area";
 "扣除门窗" = "Door and Window Deduction";
-"层高 %@m" = "Height %@m";
 "请至少输入一面墙长度" = "Enter at least one wall length";
 "请至少输入一面墙长度（>0）" = "Enter at least one wall length (>0)";
 "请输入 1.8–20" = "Enter 1.8–20";
 "请输入 0–5000" = "Enter 0–5000";
-"请输入数值" = "Enter a number";
-"房间参数" = "Room Parameters";
 "长度预设" = "Length Presets";
 "宽度预设" = "Width Presets";
-"照明要求" = "Lighting Requirements";
-"估算结果" = "Estimate Result";
-"照明估算结果" = "Lighting Estimate Result";
-"常用光通量" = "Common Lumen Values";
-"利用系数 (0-1)" = "Utilization Factor (0-1)";
-"维护系数 (0-1)" = "Maintenance Factor (0-1)";
-"建议 %lld 盏" = "Recommend %lld fixtures";
-"需总光通量 = 面积×照度 ÷ (利用系数×维护系数)" = "Required lumens = area x illuminance / (utilization factor x maintenance factor)";
-"房间面积" = "Room Area";
-"总光通量需求" = "Total Lumen Demand";
-"每平米灯具数量" = "Fixtures per m²";
-"%@ 盏" = "%@ fixtures";
-"%lld 盏" = "%lld fixtures";
-"每平米" = "Per m²";
-"需要灯具" = "Fixtures Needed";
 "请输入有效数值" = "Enter valid values";
 "请输入 0.5–10000" = "Enter 0.5–10000";
-"请输入 50–2000" = "Enter 50–2000";
-"请输入 100–200000" = "Enter 100–200000";
 "请输入 0.1–1" = "Enter 0.1–1";
-"办公室" = "Office";
-"教室" = "Classroom";
-"车间" = "Workshop";
 "走廊" = "Corridor";
-"商场" = "Mall";
-"通用（不绑定项目）" = "Generic (not bound to project)";
-"方案名称" = "Plan Name";
-"载入已选方案" = "Load Selected Plan";
-"覆盖保存到已选方案" = "Overwrite Save to Selected Plan";
-"另存为新方案" = "Save As New Plan";
-"删除已选方案" = "Delete Selected Plan";
-"导出当前项目方案" = "Export Current Project Plans";
-"需用系数" = "Demand Factor";
-"断路器裕量" = "Breaker Margin";
-"线径裕量" = "Wire Size Margin";
-"总开关容量 (A)" = "Main Breaker Capacity (A)";
-"三相不平衡阈值 (%)" = "Three-phase Imbalance Threshold (%)";
-"装机功率 (kW)" = "Installed Power (kW)";
-"删除回路" = "Delete Circuit";
-"新增回路" = "New Circuit";
 "删除此电缆" = "Delete This Cable";
 "添加电缆" = "Add Cable";
 "快捷工具" = "Quick Tools";
-"经营与清单" = "Business & Lists";
-"工程资料库" = "Project Database";
-"数据与模板" = "Data & Templates";
-"工程数据库" = "Engineering Toolbox";
 "联系人" = "Contacts";
 "疑似重复联系人" = "Possible Duplicate Contacts";
 "暂无联系人" = "No Contacts";
 "项目联系人会统一显示在这里，可按项目筛选" = "Project contacts are displayed here. You can filter by project.";
-"导出联系人 CSV" = "Export Contacts CSV";
 "新增联系人" = "New Contact";
 "材料库" = "Material Library";
 "最近使用" = "Recently Used";
 "全部材料" = "All Materials";
 "搜索结果" = "Search Results";
-"添加自定义材料" = "Add Custom Material";
 "水印相机" = "Watermark Camera";
 "拍摄" = "Capture";
-"拍摄水印照片" = "Take Watermarked Photo";
-"水印设置" = "Watermark Settings";
-"照片去向" = "Photo Destination";
-"正在保存到相册" = "Saving to Album";
 "保存到相册" = "Save to Album";
-"附到项目资料" = "Attach to Project Docs";
-"进入施工日志草稿" = "Go to Log Draft";
-"转为整改前待办" = "Convert to Pre-rectification To-do";
-"转为整改后待办" = "Convert to Post-rectification To-do";
-"导出 JPEG" = "Export JPEG";
-"清空当前照片" = "Clear Current Photo";
-"拍摄时间：" = "Capture Time: ";
-"工程：" = "Project: ";
 "未指定项目" = "No Project Specified";
-"模板：" = "Template: ";
-"标签：" = "Tag: ";
 "填写%@" = "Set %@";
 "未填写" = "Not Filled";
-"还没有照片" = "No Photo Yet";
 "project_status_active" = "In Progress";
 "project_status_paused" = "Paused";
 "project_status_completed" = "Completed";
@@ -392,19 +264,13 @@
 "construction_method_tutorial_text_size_extra_large" = "Extra Large";
 "warehouse_movement_type_inbound" = "Stock In";
 "warehouse_movement_type_outbound" = "Stock Out";
-"拍摄后可直接导出带水印的 JPEG" = "After capture, you can export a watermarked JPEG directly.";
 "不关联项目" = "No Project Association";
-"当前水印工程：" = "Current Watermark Project: ";
-"当前未指定工程，可在水印设置中选择或手填" = "No project specified. You can select or enter one in watermark settings.";
 "发布" = "Publish";
-"发布随手记" = "Publish Quick Note";
 "手绘" = "Drawing";
 "照片标注" = "Photo Markup";
 "撤销" = "Undo";
-"粗细" = "Thickness";
 "记录" = "Record";
 "附件" = "Attachments";
-"可追加媒体、拍照、语音、手绘或 PDF/DWG/DXF/文档附件" = "You can add media, photos, audio, drawings, or PDF/DWG/DXF/document attachments.";
 "关联工程" = "Associate Project";
 "不关联工程" = "No Project Association";
 "转为" = "Convert To";
@@ -418,10 +284,6 @@
 "转为项目记账" = "Convert to Project Accounting";
 "随手记不会再直接生成空金额流水。补齐金额后才会写入项目财务" = "Quick notes will not generate empty-amount entries. Fill in amounts before importing.";
 "时间线" = "Timeline";
-"暂无记录" = "No Records";
-"写一句、拍一张、录一段，都可以先放这里，之后可转为日志、待办或项目资料" = "Write, capture, or record here. Later convert to logs, to-dos, or project documents.";
-"工程概况" = "Project Overview";
-"清除工程概况筛选" = "Clear Overview Filter";
 "建议下一步" = "Next Steps";
 "当前筛选条件下没有匹配项，建议先清除筛选再查看全部工程" = "No matches under current filters. Try clearing filters to view all projects.";
 "清除筛选条件" = "Clear Filters";
@@ -443,7 +305,6 @@
 "归档项目，保留全部数据" = "Archive Project, Keep All Data";
 "删除项目及全部关联数据" = "Delete Project & All Related Data";
 "编辑资料" = "Edit Info";
-"导出项目交付包 ZIP" = "Export Delivery Package ZIP";
 "当前设备不支持扫描" = "Device doesn't support scanning";
 "请在支持相机扫描的 iPhone 或 iPad 上使用" = "Please use on an iPhone or iPad that supports camera scanning.";
 "日期" = "Date";
@@ -471,22 +332,18 @@
 "拍照保存" = "Take Photo";
 "关联已有资料" = "Link Existing Documents";
 "已关联其他账目，点击后将重新关联" = "Already linked to another account. Tap to relink.";
-"日期(yyyy-MM-dd)" = "Date(yyyy-MM-dd)";
 "报价明细" = "Quotation Details";
 "范围" = "Scope";
 "全部项目" = "All Projects";
 "全部状态" = "All Status";
-"将当前筛选报价合计写入项目合同金额" = "Write filtered total to project contract amount";
 "单价 ¥" = "Unit Price ¥";
 "税额" = "Tax";
 "折扣" = "Discount";
 "合计" = "Total";
 "从材料/人工生成报价" = "Generate from Materials/Labor";
-"导出当前报价 PDF" = "Export Quotation PDF";
 "材料清单为空" = "Material List is Empty";
 "更多操作" = "More Actions";
 "新建报价" = "New Quote";
-"请先填写公司名称、电话和地址。导出的报价单会使用这些信息" = "Please fill in company name, phone, and address first for export.";
 "基本信息" = "Basic Info";
 "数量" = "Quantity";
 "单位" = "Unit";
@@ -500,15 +357,11 @@
 "生成报价" = "Generate Quote";
 "全部未分项目" = "All Unassigned";
 "默认价格" = "Default Price";
-"材料默认单价" = "Default Material Price";
 "人工单价 ¥/工时" = "Labor Price ¥/hour";
-"生成 PDF" = "Generate PDF";
-"报价单模板" = "Quote Template";
 "客户信息" = "Customer Info";
 "公司信息" = "Company Info";
 "有效期" = "Validity Period";
 "请补全公司信息后再导出" = "Please complete company info before export.";
-"人工/辅材记录" = "Labor/Material Records";
 "添加记录" = "Add Record";
 "人工" = "Labor";
 "已结算" = "Settled";
@@ -615,7 +468,6 @@
 "进度任务" = "Progress Tasks";
 "历史计算" = "History Calculations";
 "还没有计算历史" = "No calculation history yet";
-"完成一次计算后，最近结果会显示在这里。" = "Recent results will appear here after you finish a calculation.";
 "输入: %@" = "Input: %@";
 "结果: %@" = "Result: %@";
 "清空所有历史？" = "Clear all history?";
@@ -635,7 +487,6 @@
 "确认导入" = "Confirm Import";
 "正在读取备份预览" = "Reading backup preview";
 "准备读取" = "Preparing to read";
-"文件格式不正确：" = "Invalid file format: ";
 "备份源文件已失效，请重新选择导入文件" = "Backup source has expired. Please reselect the import file.";
 "正在应用数据索引" = "Applying data index";
 "已取消导入，当前数据未变更" = "Import cancelled. Current data unchanged.";
@@ -651,7 +502,6 @@
 "先完成首份备份" = "Complete First Backup First";
 "不再提示" = "Don't Show Again";
 "建议先导出一份完整 ZIP。后续误删、覆盖导入或换机时都能快速恢复" = "Export a full ZIP backup first for easy recovery.";
-"立即导出首份备份 ZIP" = "Export First Backup ZIP Now";
 "数据健康检查" = "Data Health Check";
 "问题总数" = "Total Issues";
 "缺失照片" = "Missing Photos";
@@ -672,47 +522,27 @@
 "清空存储错误记录" = "Clear Storage Errors";
 "缺失照片文件" = "Missing Photo Files";
 "未发现问题" = "No Issues Found";
-"导出数据" = "Export Data";
 "导出格式" = "Export Format";
 "导出内容" = "Export Content";
 "导出范围" = "Export Scope";
 "格式预览" = "Format Preview";
-"模板管理" = "Template Management";
-"暂无模板" = "No Templates";
-"新建模板" = "New Template";
-"可导入材料" = "Importable Materials";
-"仅预览前 6 条" = "Showing first 6 only";
-"以下行未识别，不会导入：" = "The following lines are not recognized and will not be imported:";
-"可导入报价" = "Importable Quotes";
-"将以当前日期新增 1 条日志，内容为模板全文" = "Will add 1 log entry with today's date.";
-"预览无误，确认应用" = "Preview OK, Confirm Apply";
-"确认应用" = "Confirm Apply";
 "施工日报" = "Daily Construction Report";
 "天气" = "Weather";
-"温度" = "Temperature";
 "施工内容" = "Work Content";
 "明日计划" = "Tomorrow's Plan";
 "人员" = "Personnel";
 "机械" = "Machinery";
-"材料进场记录" = "Material Arrival Record";
 "安全记录" = "Safety Record";
-"质量记录" = "Quality Record";
 "其他记录" = "Other Records";
-"报价有效期 %lld 天" = "Quote validity %lld days";
 
-"项目「%@」有 %lld 条关联数据。归档会保留全部联系人、财务、资料、图纸和记录；删除会清除项目及全部关联数据。" = "Project \"%@\" has %lld related items. Archive keeps all data; deletion removes everything.";
 
-"检测到 %lld 个原文件缺失" = "Detected %lld missing source files";
 
-"发现 %lld 个原文件缺失，备份包会记录缺失清单。" = "Found %lld missing source files. Will be recorded in the backup manifest.";
 
-"将删除 %lld 条账目。可选择保留票据为项目资料。" = "Will delete %lld accounts. Receipts can be kept as project documents.";
 
 "联系人 (%lld)" = "Contacts (%lld)";
 
 "将删除 %lld 条出入库流水。可选择保留资料原件，避免误删送货单/照片。" = "Will delete %lld warehouse records. Source documents can be preserved.";
 
-"检测到 %lld 条历史收款记录，建议迁移到\"项目财务流水\"统一管理。" = "Detected %lld legacy payment records. Recommend migrating to project finance.";
 
 "发现 %lld 个缺失文件" = "Found %lld missing files";
 
@@ -720,37 +550,24 @@
 
 "有 %lld 条记录日期格式异常，已按\"不命中日期筛选\"处理。" = "%lld records with date format issues excluded from date filtering.";
 
-"将新增 %lld 条材料记录。未识别行不会导入。" = "Will add %lld material records. Unrecognized lines not imported.";
 
-"将新增 %lld 条报价记录。未识别行不会导入。" = "Will add %lld quotation records. Unrecognized lines not imported.";
-"还没有%@" = "No %@ yet";
-"点击右上角 + 创建第一个模板" = "Tap + in the top-right to create the first template.";
 "模板名称" = "Template Name";
 "模板内容" = "Template Content";
-"应用：%@" = "Apply: %@";
-"确认应用模板？" = "Apply Template?";
-"将新增 1 条日志记录。" = "Will add 1 log entry.";
-"解析预览" = "Parse Preview";
 "材料默认单位" = "pcs";
 
 // MARK: - Widget
 
 
-"%lld 项待处理" = "%lld pending";
 
-"%lld 种材料" = "%lld material(s)";
 
-"%lld 种不足" = "%lld low stock";
 
 "今日待办" = "Today";
 
 "项目进度" = "Progress";
 
-"暂无进行中的项目" = "No active projects";
 
 "材料种类" = "Materials";
 
-"库存不足" = "Low Stock";
 
 "%lld 项待办" = "%lld to-do(s)";
 
@@ -795,9 +612,7 @@
 
 "仓库流水" = "Warehouse Movements";
 
-"照明回路" = "Lighting Circuits";
 
-"付款记录" = "Payment Records";
 
 "税" = "Tax";
 
@@ -805,21 +620,10 @@
 
 // MARK: - Project Bookkeeping
 
-"正式账目汇总" = "Official Records Summary";
-"筛选账目" = "Filter Records";
-"全部账目" = "All Records";
-"账目筛选" = "Record Filters";
-"可入账资料" = "Bookable Documents";
-"查看待入账资料" = "View Bookable Documents";
-"待入账资料" = "Pending Bookable Documents";
 "全部日期" = "All Dates";
-"近7天" = "Last 7 Days";
-"近30天" = "Last 30 Days";
-"金额待补" = "Amount Needed";
 "入账" = "Book";
 "quick_tool_unselected_hint" = "Unselected items are removed from top shortcuts and stay available in the full \"Practical Tools\" list below.";
 "settings_language_switch_feedback" = "App language updated.";
-"settings_auto_save_disabled_hint" = "Real-time auto-save is off. Data now auto-saves when the app goes inactive or enters background.";
 "project_delete_dialog_message" = "Project \"%@\" has %d related records. Archiving keeps contacts, finance, files, drawings, and logs; deleting removes all related data and material-sheet drafts under this project.";
 "quick_tool_editor_header" = "Choose shortcuts shown at the top of Toolbox";
 "quick_tool_editor_reset_default" = "Restore defaults";
@@ -835,25 +639,7 @@
 "施工日志" = "Construction Log";
 "人" = "person(s)";
 "张照片" = "photo(s)";
-"小时" = "hour(s)";
-"日志、进度、待办、图纸、记账、材料、资料和随手记会统一显示在这里。" = "Logs, progress, to-dos, drawings, bookkeeping, materials, documents, and notes are shown together here.";
-"搜索时间轴" = "Search timeline";
 "总项目时间轴" = "Global Project Timeline";
-"widget_material_stock_count_format" = "%d materials";
-"widget_low_stock_count_format" = "%d low stock";
-"widget_project_todo_count_format" = "%d pending";
-"widget_updated_time_format" = "Updated %@";
-"widget_updated_datetime_format" = "Updated %@";
-"widget_label_todo" = "To-do";
-"widget_label_today_todos" = "Today";
-"widget_label_project_progress" = "Progress";
-"widget_label_material_types" = "Materials";
-"widget_label_low_stock" = "Low Stock";
-"widget_label_missing_receipt" = "Missing Receipt";
-"widget_label_price_spike" = "Price Spike";
-"widget_label_backup_overdue" = "Backup Overdue";
-"widget_pending_items_text" = "pending";
-"widget_no_active_projects" = "No active projects";
 "widget_project_status_active" = "Active";
 "widget_project_status_paused" = "Paused";
 "widget_project_status_completed" = "Completed";
@@ -876,12 +662,10 @@
 "Widget 项目数" = "Widget Project Count";
 "iCloud 中还没有备份。" = "No backups found in iCloud.";
 "iCloud 云备份" = "iCloud Backup";
-"下次预计" = "Next Scheduled";
 "不正确" = "Invalid";
 "业务数据" = "Business Data";
 "人工项目关联无效" = "Invalid Labor Project Reference";
 "仅在 Wi‑Fi 下自动备份" = "Auto Backup on Wi-Fi Only";
-"仅显示前 50 条" = "Showing first 50 only";
 "从 iCloud 恢复备份？" = "Restore Backup from iCloud?";
 "仓库附件映射悬空" = "Dangling Warehouse Attachment Mapping";
 "仓库项目关联无效" = "Invalid Warehouse Project Reference";
@@ -891,7 +675,6 @@
 "修复引用与关联？" = "Fix References and Links?";
 "健康概览" = "Health Overview";
 "先新建一个工程，再补充日志、资料、报价和回款。" = "Create a project first, then add logs, documents, quotes, and payments.";
-"全局文件检索" = "Global File Search";
 "先新建项目并补充日志、图纸、票据或随手记附件，这里会自动聚合显示。" = "Create a project first, then add logs, drawings, receipts, or quick note attachments. They will be collected here automatically.";
 "搜索项目或资料文件" = "Search projects or documents";
 "暂无项目资料" = "No Project Documents";
@@ -904,8 +687,6 @@
 "删除材料价格 %lld 条" = "Delete %lld material price entries";
 "已删除 %lld 条材料价格" = "%lld material price entries deleted";
 "删除自定义材料" = "Delete custom material";
-"已删除自定义材料「%@」" = "Custom material \"%@\" deleted";
-"已恢复自定义材料" = "Custom material restored";
 "删除项目" = "Delete Project";
 "刷新云端备份列表" = "Refresh Cloud Backup List";
 "原文件附件（照片/图纸/文档）" = "Original Attachments (Photos/Drawings/Documents)";
@@ -913,6 +694,12 @@
 "参考单价" = "Reference Unit Price";
 "取消云备份" = "Cancel Cloud Backup";
 "可按业务模块选择备份范围。关闭“原文件附件”可显著减小体积。" = "Choose backup scope by module. Turning off original attachments can significantly reduce size.";
+"备份范围" = "Backup Scope";
+"完整备份" = "Full Backup";
+"部分备份" = "Partial Backup";
+"旧备份（范围未知）" = "Older Backup (Unknown Scope)";
+"额外保留最新一份已上传的完整备份。首次完整备份上传前，范围未知的旧备份会保留。" = "The latest uploaded full backup is kept in addition to the selected number. Older backups with unknown scope stay until a full backup uploads.";
+"所选导入方式无需恢复原文件。" = "No original files need to be restored with the selected import mode.";
 "可自动修复项目关联" = "Auto-fixable Project References";
 "名称" = "Name";
 "模板" = "Template";
@@ -936,8 +723,6 @@
 "在左侧选择工程后，右侧常驻展示项目详情。" = "Select a project on the left; details stay pinned on the right.";
 "处理" = "Actions";
 "备份到 iCloud" = "Backup to iCloud";
-"备份导出不设体积上限，会按 ZIP64 流式打包；大文件导出前请确认设备剩余空间充足。" = "Backup export has no size cap and uses ZIP64 streaming; ensure enough free space before exporting large backups.";
-"备份概览" = "Backup Overview";
 "备份源文件已失效，请重新选择导入文件。" = "Backup source file is unavailable. Please reselect the import file.";
 "备份（iCloud）" = "Backup (iCloud)";
 "失效" = "Unavailable";
@@ -946,10 +731,8 @@
 "完工 %@" = "Finish %@";
 "客户姓名/单位" = "Client Name / Company";
 "客户电话" = "Client Phone";
-"导入备份请在下方“本地备份”中选择当前版本 ZIP。" = "For backup import, choose a ZIP exported by the current version under Local Backup below.";
 "导入预置材料为价格库" = "Import Preset Materials into Price Library";
 "导入预览" = "Import Preview";
-"导出、导入与 iCloud 同步" = "Export, Import, and iCloud Sync";
 "导出备份 ZIP" = "Export Backup ZIP";
 "导航" = "Navigation";
 "将修复缺失引用、财务/仓库悬空附件映射、资料悬空关联和可置空的无效项目关联，不会删除任何照片、图纸、票据或随手记原文件。无法自动修复的项目关联会保留在“需手动处理项目关联”列表。" = "This will fix missing references, dangling finance/warehouse attachment mappings, dangling document links, and clearable invalid project references. No original photos, drawings, receipts, or note files will be deleted. Non-auto-fixable references remain in the manual list.";
@@ -1059,19 +842,14 @@
 "预计完工" = "Expected Completion";
 "风险 %@" = "Risk %@";
 "%@ 数据健康报告" = "%@ Data Health Report";
-"%@（目标不可用）" = "%@ (Target Unavailable)";
-"UI 测试预览备份生成失败：%@" = "UI test preview backup generation failed: %@";
 "iCloud 备份失败：%@" = "iCloud backup failed: %@";
 "iCloud 备份读取失败：%@" = "Failed to read iCloud backup: %@";
 "iCloud 读取失败：%@" = "iCloud read failed: %@";
 "原项目ID %@" = "Original Project ID %@";
 "发现 %d 个原文件缺失，备份包会记录缺失清单。" = "Found %d missing original files; backup will include a missing-files list.";
 "备份生成失败：%@" = "Backup generation failed: %@";
-"导入临时文件清理失败：%@，%@" = "Failed to clean import temp file: %@, %@";
 "导入失败：%@" = "Import failed: %@";
 "导入完成（恢复 %d 个原文件）" = "Import completed (restored %d original files)";
-"已备份到 iCloud：%@，%@。" = "Backed up to iCloud: %@, %@.";
-"文件格式不正确：%@" = "Invalid file format: %@";
 "未能读取所选文件：%@" = "Unable to read selected file: %@";
 "检测到 %d 个原文件缺失" = "Detected %d missing original files";
 "生成时间: %@" = "Generated at: %@";
@@ -1085,10 +863,7 @@
 "打开%@功能" = "Open %@ feature";
 "完成 %@" = "Completed %@";
 "已打开%@" = "Opened %@";
-"延期 %lld" = "Overdue %lld";
-"今日 %lld" = "Today %lld";
 "缺票 %lld" = "Missing receipt %lld";
-"价格异动 %lld" = "Price spike %lld";
 "待办 %lld" = "Todo %lld";
 "共 %lld 个" = "%lld total";
 "更多 %lld" = "More %lld";
@@ -1103,7 +878,6 @@
 "已维护 %lld 位" = "%lld contacts maintained";
 "检测到 %lld 个缺失原件" = "Detected %lld missing original files";
 "还有 %lld 项未显示" = "%lld more items not shown";
-"完工前还有 %lld 项需要处理" = "%lld items still need action before completion";
 "已覆盖 %lld 个施工日，共 %lld 条日志" = "Covered %lld working days with %lld logs";
 "已记录 %lld 条" = "%lld logs recorded";
 "缺 %lld 个施工日" = "Missing %lld working days";
@@ -1113,21 +887,15 @@
 "%lld 组图纸未标记当前版" = "%lld drawing groups are missing a current version";
 "%lld 组图纸未标记当前版：%@" = "%lld drawing groups are missing a current version: %@";
 "已上传 %lld 份，均有当前版" = "%lld drawings uploaded, all marked current";
-"待补报价 %lld" = "%lld quotations need completion";
 "%lld 张照片" = "%lld photos";
 "关联工艺 %lld 条" = "%lld linked methods";
-"概况筛选：%@" = "Overview filter: %@";
 "%@ 时间线" = "%@ Timeline";
 "%lld 天" = "%lld days";
-"DWG、PDF、DXF 都按图纸原件独立管理和打开。" = "DWG, PDF, and DXF are managed and opened as drawing originals.";
-"Excel 表格" = "Excel Sheet";
 "人工费 %@" = "Labor %@";
 "人数" = "Workers";
-"先填写公司信息" = "Please complete company info first";
 "全部" = "All";
 "关联施工工艺" = "Linked Construction Methods";
 "关联日志: %@" = "Linked Log: %@";
-"关联日志日期(yyyy-MM-dd)" = "Linked Log Date (yyyy-MM-dd)";
 "内容" = "Content";
 "写入合同" = "Sync to Contract";
 "写施工日志" = "Write Daily Log";
@@ -1144,7 +912,6 @@
 "同名图纸导入新版本后，可在这里查看版本时间线。" = "After importing a new version with the same drawing name, you can view the version timeline here.";
 "商务信息" = "Business Info";
 "图片已丢失或不可读取" = "Image is missing or cannot be read";
-"图纸信息" = "Drawing Info";
 "图纸名称" = "Drawing Name";
 "图纸详情" = "Drawing Details";
 "多云" = "Cloudy";
@@ -1153,10 +920,7 @@
 "安全事项" = "Safety Notes";
 "客户名称" = "Customer Name";
 "客户确认日期" = "Customer Confirmation Date";
-"客户确认日期(yyyy-MM-dd)" = "Customer Confirmation Date (yyyy-MM-dd)";
-"客户确认日期（yyyy-MM-dd）" = "Customer Confirmation Date (yyyy-MM-dd)";
 "导入时间" = "Import Time";
-"导出%@" = "Export %@";
 "导出当前报价" = "Export Current Quote";
 "小雨" = "Light Rain";
 "工价（每工时）" = "Labor Rate (per hour)";
@@ -1169,16 +933,13 @@
 "已同步到项目合同金额" = "Synced to project contract amount";
 "已新增报价" = "Quote added";
 "已更新报价" = "Quote updated";
-"开始日期(yyyy-MM-dd)" = "Start Date (yyyy-MM-dd)";
 "当前工程" = "Current Project";
 "当前版" = "Current";
 "必填信息" = "Required Info";
 "成本" = "Cost";
-"截止日期(yyyy-MM-dd)" = "Due Date (yyyy-MM-dd)";
 "折扣 %" = "Discount %";
 "报价单" = "Quotation";
 "报价单.pdf" = "quotation.pdf";
-"报价单表格.xls" = "quotation-sheet.xls";
 "搜索报价名称" = "Search quote names";
 "整改记录" = "Rectification Record";
 "晴" = "Sunny";
@@ -1207,11 +968,9 @@
 "版本（如 V1）" = "Version (e.g. V1)";
 "状态" = "Status";
 "状态: %@" = "Status: %@";
-"独立文件预览" = "Standalone File Preview";
 "现场备注" = "On-site Note";
 "现场确认人" = "Confirmed By";
 "班组（可选）" = "Crew (Optional)";
-"留空表示待补" = "Leave blank if pending";
 "确认 %@" = "Confirmed %@";
 "税率 %" = "Tax %";
 "签字人" = "Signer";
@@ -1224,13 +983,10 @@
 "设为当前版" = "Set Current";
 "设为当前版本" = "Set as Current Version";
 "该操作仅删除当前照片，不会删除整条日志。" = "This only deletes the current photo and will not delete the entire log.";
-"请先填写公司名称、电话和地址。导出的报价单会使用这些信息。" = "Please fill in company name, phone, and address first. The exported quotation will use this info.";
 "请补全公司信息后再导出。" = "Please complete company information before export.";
 "质量问题" = "Quality Issue";
 "资料" = "Documents";
 "转合同金额" = "Contract Amount";
-"进场日期(yyyy-MM-dd)" = "Arrival Date (yyyy-MM-dd)";
-"进场日期（yyyy-MM-dd）" = "Arrival Date (yyyy-MM-dd)";
 "选择工程" = "Select Project";
 "采购状态" = "Purchase Status";
 "进场日期" = "Arrival Date";
@@ -1314,9 +1070,7 @@
 "按当前项目/筛选导出照片页" = "Export Photo Sheet for Current Project/Filter";
 "按日期、内容、安全事项搜索" = "Search by date, content, or safety notes";
 "新建施工日志" = "New Daily Log";
-"施工日志图片导入失败：%@" = "Daily log image import failed: %@";
 "日" = "Sun";
-"日志筛选" = "Log Filters";
 "日期筛选" = "Date Filter";
 "暂无工艺条目，可先在工具箱-施工工艺库新增" = "No method entries yet. Add one in Toolbox - Construction Method Library first.";
 "暂无新增材料进场" = "No new material arrivals.";
@@ -1333,7 +1087,6 @@
 "清除" = "Clear";
 "清除筛选" = "Clear Filters";
 "照片墙" = "Photo Wall";
-"现场照片保存失败：%@" = "Site photo save failed: %@";
 "现场照片页.pdf" = "site-photo-sheet.pdf";
 "确定" = "OK";
 "筛选" = "Filters";
@@ -1365,7 +1118,6 @@
 "%@添加或更换照片" = "Add or replace photo for %@";
 "移除%@照片" = "Remove %@ photo";
 "删除%@" = "Delete %@";
-"已将 %d 项材料添加到「%@」" = "Added %d items to \"%@\"";
 "已添加到「%@」" = "Added to \"%@\"";
 "添加%@到材料单" = "Add %@ to material sheet";
 "元/%@" = "CNY/%@";
@@ -1375,7 +1127,6 @@
 "已关联附件 (%d)" = "Linked Attachments (%d)";
 "移除选中 %d 项" = "Remove %d selected items";
 "关联选中 %d 项" = "Link %d selected items";
-"%@ 天" = "%@ days";
 "%d 条" = "%d records";
 "CSV" = "CSV";
 "人工明细" = "Labor Details";
@@ -1387,14 +1138,12 @@
 "全部工种" = "All Work Types";
 "全部班组" = "All Teams";
 "出工天数" = "Work Days";
-"出工总天数" = "Total Work Days";
 "删除这条人工记录？" = "Delete this labor record?";
 "合计人工费" = "Total Labor Cost";
 "导出 %@" = "Export %@";
 "导出人工记录" = "Export Labor Records";
 "工价" = "Daily Rate";
 "工种（例如电工）" = "Work Type (e.g. Electrician)";
-"已删除 %d 条人工记录" = "Deleted %d labor records";
 "已删除人工记录" = "Labor record deleted";
 "已新增人工记录" = "Labor record added";
 "已更新人工记录" = "Labor record updated";
@@ -1521,7 +1270,6 @@
 "已检测到本次流程内的新备份" = "A new backup from this flow was detected";
 "最近本机备份：%@" = "Latest local backup: %@";
 "正在准备" = "Preparing";
-"此操作不可恢复。\n所有项目、日志、报价、材料与附件文件将被永久删除。" = "This action cannot be undone.\nAll projects, logs, quotes, materials, and attachment files will be permanently deleted.";
 "清空本机全部数据（需先备份）" = "Clear All Local Data (Backup Required)";
 "清空本机数据" = "Clear Local Data";
 "清空本机数据前，必须先生成一份新的本机备份 ZIP。" = "Before clearing local data, you must generate a new local backup ZIP.";
@@ -1543,15 +1291,11 @@
 "摘要" = "Summary";
 "详情" = "Detail";
 "来源" = "Source";
-"导出操作审计日志 CSV" = "Export Operation Audit CSV";
 "操作审计日志.csv" = "OperationAuditLog.csv";
 "清空操作审计日志" = "Clear Operation Audit Logs";
 "备份健康提醒阈值" = "Backup Health Reminder Threshold";
 "超过该天数未成功备份时，工作台会显示“备份超期”提醒。" = "When no backup succeeds for this many days, the dashboard shows a backup overdue reminder.";
 "将删除本机所有项目、附件与导入文件，不会影响你已导出的备份 ZIP。" = "This deletes all local projects, attachments, and imported files. Exported backup ZIP files are not affected.";
-"实验功能" = "Experimental Features";
-"将清空当前本地数据并写入示例项目、日志、报价和材料。此操作不可撤销。" = "Current local data will be cleared and sample projects, logs, quotes, and materials will be written. This cannot be undone.";
-"将写入示例项目、日志、报价和材料，便于演示功能。" = "Sample projects, logs, quotes, and materials will be written for demos.";
 "确认删除这 %lld 条材料吗？" = "Delete these %lld materials?";
 "确认删除已选 %lld 条材料吗？" = "Delete the %lld selected materials?";
 "已删除 %lld 条材料" = "%lld materials deleted";
@@ -1578,7 +1322,6 @@
 "应用到已选材料" = "Apply to Selected Materials";
 "清除选择" = "Clear Selection";
 "云备份读取失败：%@" = "Cloud backup read failed: %@";
-"暂无可恢复的清理记录。" = "No recoverable cleanup records.";
 "暂无可恢复的回收站项目。" = "No recoverable recycle bin items.";
 "%lld 个文件" = "%lld files";
 "可恢复至 %@" = "Recoverable until %@";
@@ -1589,10 +1332,7 @@
 "回收站保留时间" = "Trash retention";
 "之后新清理的文件可恢复至 %@。" = "New cleanup batches can be restored until %@.";
 "只影响之后新清理的批次；已有回收站批次仍按原到期时间处理。" = "Applies only to new cleanup batches; existing trash batches keep their original expiration date.";
-"项目文件清理后会先进入回收站，默认保留 %lld 天。过期批次会在进入本页时自动永久删除。" = "Cleaned project files go to Cleanup Trash first and are kept for %lld days by default. Expired batches are permanently deleted when this page opens.";
-"项目文件清理后会先进入回收站，当前保留 %lld 天。过期批次会在进入本页时自动永久删除。" = "Cleaned project files go to Cleanup Trash first and are currently kept for %lld days. Expired batches are permanently deleted when this page opens.";
 "照片、图纸、票据、附件删除和项目文件清理都会先进入回收站，当前保留 %lld 天。过期项目会在进入本页时自动永久删除。" = "Deleted photos, drawings, receipts, attachments, and cleaned project files go to the Recycle Bin first and are currently kept for %lld days. Expired items are permanently deleted when this page opens.";
-"清理后文件将进入回收站，可在 %lld 天内恢复。" = "Cleaned files will go to Cleanup Trash and can be restored within %lld days.";
 "清理后文件将进入回收站，可恢复至 %@（%lld 天内）。" = "Cleaned files will go to Cleanup Trash and can be restored until %@ (within %lld days).";
 "清理批次" = "Cleanup batch";
 "隔离文件" = "Quarantined File";
@@ -1603,7 +1343,6 @@
 "当前各类文件都低于阈值。" = "All file categories are below the threshold.";
 "暂无可清理项目文件。" = "No cleanable project files.";
 "照片 %@" = "Photos %@";
-"视频 %@" = "Videos %@";
 "图纸原件 %@" = "Drawing originals %@";
 "票据 %@" = "Receipts %@";
 "备份估算 %@" = "Backup estimate %@";
@@ -1641,10 +1380,7 @@
 "最近备份：未检测到本机或云备份，建议先执行备份后再清理。" = "Latest backup: no local or cloud backup detected. Back up before cleanup.";
 "最近备份：%@（%lld 天前），建议先备份后再清理。" = "Latest backup: %@ (%lld days ago). Back up before cleanup.";
 "最近备份：%@。" = "Latest backup: %@.";
-"已清理 %@ 的%@：%lld 个文件。" = "Cleaned %@ %@: %lld files.";
 "隔离文件清单读取失败：%@" = "Quarantined file manifest read failed: %@";
-"清理回收站已自动永久删除 %lld 个过期批次。" = "Cleanup Trash permanently deleted %lld expired batches automatically.";
-"回收站已自动永久删除 %lld 个过期隔离文件。" = "Recycle Bin permanently deleted %lld expired quarantined files automatically.";
 "恢复清理回收站" = "Restore Cleanup Trash";
 "已从清理回收站恢复：%@。" = "Restored from Cleanup Trash: %@.";
 "清理回收站恢复失败：%@" = "Cleanup Trash restore failed: %@";
@@ -1658,7 +1394,6 @@
 "已永久删除隔离文件：%@。" = "Permanently deleted quarantined file: %@.";
 "隔离文件永久删除失败：%@" = "Quarantined file permanent delete failed: %@";
 "%@ · %@" = "%@ · %@";
-"已将 %@ 的%@移入清理回收站：%lld 个文件，可在 %lld 天内恢复。" = "Moved %@ %@ to Cleanup Trash: %lld files, recoverable for %lld days.";
 "已将 %@ 的%@移入清理回收站：%lld 个文件，可恢复至 %@。" = "Moved %@ %@ to Cleanup Trash: %lld files, recoverable until %@.";
 "清理回收站写入失败：%@" = "Cleanup Trash write failed: %@";
 "无法访问清理回收站目录。" = "Cannot access the Cleanup Trash directory.";
@@ -1666,8 +1401,6 @@
 "无法移入清理回收站：%@" = "Cannot move to Cleanup Trash: %@";
 "无法恢复清理回收站文件：%@" = "Cannot restore Cleanup Trash file: %@";
 "无法永久删除清理回收站文件：%@" = "Cannot permanently delete Cleanup Trash file: %@";
-"清理回收站清单读取失败：%@" = "Cleanup Trash manifest read failed: %@";
-"清理回收站过期清单更新失败：%@" = "Cleanup Trash expired manifest update failed: %@";
 "全部可清理文件" = "All Cleanable Files";
 "项目文件" = "Project Files";
 "清理全部" = "Clean All";
@@ -1686,7 +1419,6 @@
 "清理项目文件？" = "Clean project files?";
 "今天还没有施工日志" = "No daily log today";
 "今日出入库" = "Today's warehouse movements";
-"今日快捷动作" = "Today's Quick Actions";
 "今日无风险" = "No risks today";
 "今日现场" = "Today's Site";
 "全部良好" = "All Good";
@@ -1706,9 +1438,6 @@
 "已收起" = "Collapsed";
 "拍照片" = "Take Photo";
 "更多概况" = "More Overview";
-"未识别到可导入材料，请按“名称 × 数量单位”格式填写。" = "No importable materials found. Use the \"Name x quantity unit\" format.";
-"未识别到可导入报价，请按“名称 ¥ 单价”格式填写。" = "No importable quote items found. Use the \"Name ¥ unit price\" format.";
-"将以当前日期新增 1 条日志，内容为模板全文。" = "A new log will be added for today with the full template content.";
 "施工进度" = "Construction Progress";
 "视图" = "View";
 "暂无进度任务" = "No Progress Tasks";
@@ -1805,16 +1534,12 @@
 "规格" = "Specification";
 "暂无附件" = "No Attachments";
 "出入库详情" = "Warehouse Movement Details";
-"仓库临时媒体清理失败：%@" = "Warehouse temporary media cleanup failed: %@";
 "%@（导入失败）" = "%@ (import failed)";
 "%@-附件" = "%@-Attachment";
 "仓库%@" = "Warehouse %@";
 "预置材料" = "Preset Materials";
 "%@人" = "%@ people";
-"%@天" = "%@ days";
-"人工记录CSV表头" = "Date,Project,Work Type,Crew,Workers,Days,Rate (per day),Total,Settled,Notes";
 "人工记录报表" = "Labor Record Report";
-"%lld条 · %@天 · 合计 %@ · 待结 %@" = "%lld records · %@ days · Total %@ · Unsettled %@";
 "导出时间: %@" = "Exported at: %@";
 "是" = "Yes";
 "否" = "No";
@@ -1839,13 +1564,11 @@
 "项目记账" = "Project Bookkeeping";
 "票据识别失败" = "Receipt Recognition Failed";
 "打开票据失败：%@" = "Could not open receipt: %@";
-"票据 OCR 识别失败：%@，%@" = "Receipt OCR failed: %@, %@";
 "已关联票据暂不支持识别（仅图片/PDF）" = "Linked receipts cannot be recognized yet (image/PDF only)";
 "从已关联票据一键回填（%lld）" = "Autofill from linked receipts (%lld)";
 "编辑账目" = "Edit Record";
 "删除这条账目？" = "Delete this record?";
 "已关联票据暂不支持识别，请使用图片或 PDF。" = "Linked receipts cannot be recognized. Use an image or PDF.";
-"关联票据 OCR 识别失败：%@，%@" = "Linked receipt OCR failed: %@, %@";
 "已尝试 %lld 份关联票据，仍未提取到可回填字段（%@）。" = "Tried %lld linked receipts, but no autofill fields were extracted (%@).";
 "已尝试 %lld 份关联票据，仍未提取到可回填字段。" = "Tried %lld linked receipts, but no autofill fields were extracted.";
 "金额：%@" = "Amount: %@";
@@ -1865,28 +1588,22 @@
 "来源: 相册" = "Source: Photo Library";
 " · %lld 页" = " · %lld pages";
 "%@ · %@%@ · %@" = "%@ · %@%@ · %@";
-"图纸台账入口" = "Drawing Register";
 "体检与清理" = "Health & Cleanup";
 "保留策略：每工具最近 %lld 条，总计最多 %lld 条" = "Retention: latest %lld per tool, up to %lld total";
 "健康检查" = "Health Check";
-"创建本地或 iCloud 备份，并查看备份体积与恢复建议。" = "Create local or iCloud backups and review backup size and restore guidance.";
 "备份估算" = "Estimated Backup Size";
 "大文件阈值" = "Large File Threshold";
 "存储清理" = "Storage Cleanup";
-"存储清理中心读取云备份失败：%@" = "Storage Cleanup Center failed to read cloud backups: %@";
-"导入备份并预览差异，可选择合并或覆盖当前数据。" = "Import backups, preview differences, then merge or replace current data.";
 "导入恢复" = "Import & Restore";
 "导出" = "Export";
 "扫描缺失文件、无效关联与孤立文件，并支持一键修复。" = "Scan for missing files, invalid links, and orphaned files, with one-tap repair.";
 "按策略清理 %lld 条" = "Clean %lld by Policy";
-"按项目或日期筛选后导出 CSV / Excel / PDF / ZIP。" = "Export CSV, Excel, PDF, or ZIP after filtering by project or date.";
 "显示" = "Display";
 "查看照片/视频/图纸原件/备份/历史计算占用，支持按项目清理附件文件。" = "Review storage used by photos, videos, drawing originals, backups, and calculation history, and clean project attachments by project.";
 "清空" = "Clear";
 "清空所有计算历史？" = "Clear all calculation history?";
 "清空计算历史" = "Clear Calculation History";
 "空间汇总" = "Storage Summary";
-"统一查看健康检查和存储占用，集中完成体检、修复与清理。" = "Review health checks and storage use together, then run checks, repairs, and cleanup in one place.";
 "计算中…" = "Calculating...";
 "计算历史 %lld 条" = "%lld calculation history records";
 "   - 图纸数量: %lld 份" = "   - Drawings: %lld files";
@@ -1911,57 +1628,33 @@
 "   - 缺失日期: %@" = "   - Missing dates: %@";
 "   - 联系人数量: %lld 位" = "   - Contacts: %lld";
 "   - 需票据账目: %lld 笔" = "   - Records requiring receipts: %lld";
-"  相别%@" = "  Phase %@";
 "  附件: %@" = "  Attachments: %@";
 "%@ 项目交付包" = "%@ Delivery Package";
 "%@ 项目归档报告" = "%@ Project Archive Report";
 "%@-照片页" = "%@ - Photo Pages";
-"%@_项目交付包.pdf" = "%@_Delivery_Package.pdf";
-"00-交付包" = "00-Delivery Package";
-"01-票据原件" = "01-Original Receipts";
-"02-图纸原件" = "02-Original Drawings";
-"03-现场照片原件" = "03-Original Site Photos";
-"04-随手记" = "04-Quick Notes";
-"05-联系人" = "05-Contacts";
-"1. %@/%@" = "1. %@/%@";
 "1. 施工日志" = "1. Construction Logs";
 "1. 项目封面" = "1. Project Cover";
-"2. %@/%@" = "2. %@/%@";
 "2. 图纸当前版" = "2. Current Drawing Version";
 "2. 目录" = "2. Table of Contents";
-"3. %@/ (票据/资料原始文件)" = "3. %@/ (original receipts/documents)";
 "3. 报价表" = "3. Quote Table";
 "3. 缺票检查" = "3. Missing Receipt Check";
-"4. %@/ (图纸原始文件，含 PDF/DWG/DXF)" = "4. %@/ (original drawings, including PDF/DWG/DXF)";
 "4. 日志表" = "4. Log Table";
-"4. 联系人" = "4. Contacts";
-"5. %@/ (日志和整改照片文件)" = "5. %@/ (log and rectification photos)";
-"5. 未结清账目" = "5. Unsettled Records";
 "5. 项目财务流水" = "5. Project Financial Ledger";
-"6. %@/ (清单和原始附件)" = "6. %@/ (list and original attachments)";
-"6. 票据索引" = "6. Receipt Index";
-"7. %@/ (联系人清单)" = "7. %@/ (contact list)";
 "7. 联系人与随手记" = "7. Contacts and Quick Notes";
 "8. 照片页" = "8. Photo Pages";
 "9. 签字页" = "9. Signature Page";
-"A/B/C相电流: %@ / %@ / %@ A" = "A/B/C phase current: %@ / %@ / %@ A";
 "一、项目概况" = "1. Project Overview";
 "三、资料完整度" = "3. Document Completeness";
 "二、经营汇总" = "2. Business Summary";
 "五、应收/应付提醒" = "5. Receivable/Payable Reminders";
 "交付前检查清单" = "Pre-Delivery Checklist";
-"交付前检查清单.txt" = "Pre-Delivery Checklist.txt";
-"供电: %@  %lldV" = "Supply: %@  %lldV";
 "公司/班组" = "Company/Crew";
 "六、未完成待办" = "6. Open Todos";
-"内容:" = "Contents:";
 "写入交付包 PDF" = "Writing delivery package PDF";
 "写入交付检查清单" = "Writing delivery checklist";
 "写入联系人清单" = "Writing contact list";
 "写入说明文件" = "Writing README";
 "写入随手记清单" = "Writing quick note list";
-"功率因数: %@  需用系数: %@" = "Power factor: %@  Demand factor: %@";
-"参数无效，无法计算" = "Invalid parameters. Cannot calculate";
 "合同金额: %@  已收: %@  未收: %@" = "Contract: %@  Collected: %@  Uncollected: %@";
 "合计: %@" = "Total: %@";
 "四、归档前待处理" = "4. Pending Items Before Archive";
@@ -1976,18 +1669,12 @@
 "小计: %@" = "Subtotal: %@";
 "工期: %@ 至 %@" = "Schedule: %@ to %@";
 "应收/应付提醒: %lld 笔" = "Receivable/payable reminders: %lld";
-"待处理 %lld 项" = "%lld pending items";
 "打包图纸 %@" = "Packaging drawing %@";
 "打包照片 %@ %@" = "Packaging photo %@ %@";
 "打包票据 %@" = "Packaging receipt %@";
 "打包随手记附件 %@" = "Packaging quick note attachment %@";
-"报价合计: %@" = "Quote total: %@";
-"报价合计: %@  材料成本: %@  人工成本: %@" = "Quote total: %@  Material cost: %@  Labor cost: %@";
-"报价日期: %@，有效期至: %@" = "Quote date: %@, valid until: %@";
 "报价表" = "Quote Table";
 "收支" = "Direction";
-"断路器(A)" = "Breaker (A)";
-"方案: %@" = "Plan: %@";
 "施工日志: %lld 条  现场照片: %lld 张  进度平均: %lld%%" = "Construction logs: %lld  Site photos: %lld  Average progress: %lld%%";
 "无未完成待办、逾期进度、到期提醒或缺票账目。" = "No open todos, overdue progress items, due reminders, or records missing receipts.";
 "日志表" = "Log Table";
@@ -1999,7 +1686,6 @@
 "暂无票据资料" = "No receipt documents";
 "暂无财务记录" = "No financial records";
 "暂无随手记" = "No quick notes";
-"更新时间: %@" = "Updated at: %@";
 "未完成待办: %lld 项，其中逾期 %lld 项" = "Open todos: %lld, including %lld overdue";
 "未指定" = "Unspecified";
 "本交付包包含 %lld 份票据/资料索引，原始文件已随 ZIP 打包，可在“%@”目录查看。" = "This delivery package includes %lld receipt/document index entries. Original files are included in the ZIP under \"%@\".";
@@ -2010,11 +1696,8 @@
 "检查结论: %@" = "Check result: %@";
 "检查随手记附件 %@" = "Checking quick note attachment %@";
 "毛利估算: %@" = "Estimated gross profit: %@";
-"毛利估算: %@  工时: %@  进度: %lld%%" = "Estimated gross profit: %@  Hours: %@  Progress: %lld%%";
-"汇总: 回路数 %lld, 总装机 %@kW, 总计算 %@kW, 电流合计 %@A" = "Summary: %lld circuits, installed %@kW, demand %@kW, total current %@A";
 "照片数" = "Photos";
 "状态: %@  工期: %@ 至 %@" = "Status: %@  Schedule: %@ to %@";
-"电流(A)" = "Current (A)";
 "电话" = "Phone";
 "监理/验收: ____________________" = "Supervisor/acceptance: ____________________";
 "目录" = "Table of Contents";
@@ -2026,23 +1709,17 @@
 "票据索引" = "Receipt Index";
 "票据附件页" = "Receipt Attachment Page";
 "税额: %@    折扣: -%@" = "Tax: %@    Discount: -%@";
-"税额: %@，折扣: -%@" = "Tax: %@, discount: -%@";
 "签字确认: %@" = "Signature confirmation: %@";
 "签字确认: %@____________________" = "Signature confirmation: %@____________________";
 "签字确认页" = "Signature Confirmation Page";
-"线径(mm²)" = "Wire Size (mm²)";
 "缺票账目: %lld 笔" = "Records missing receipts: %lld";
-"联系人清单.tsv" = "Contact List.tsv";
-"装机(kW)" = "Installed (kW)";
 "角色" = "Role";
-"计算(kW)" = "Demand (kW)";
 "记账收入: %@  记账支出: %@  账面结余: %@" = "Bookkeeping income: %@  Expense: %@  Book balance: %@";
 "说明: 该清单由交付包导出时自动生成，供完工交付前核对使用。" = "Note: This checklist is generated automatically during delivery package export for final handover review.";
 "负责人: %@" = "Manager: %@";
 "通过" = "Passed";
 "逾期进度: %lld 项" = "Overdue progress items: %lld";
 "附: 材料 %lld 条 · 人工 %lld 条 · 待办 %lld 条 · 图纸 %lld 份" = "Appendix: %lld materials · %lld labor records · %lld todos · %lld drawings";
-"随手记清单.tsv" = "Quick Note List.tsv";
 "页数" = "Pages";
 "项目: %@" = "Project: %@";
 "项目交付包 PDF" = "Project Delivery Package PDF";
@@ -2053,14 +1730,6 @@
 "日志和整改照片文件" = "Log and Rectification Photos";
 "随手记清单和原始附件" = "Quick Note List and Original Attachments";
 "联系人清单" = "Contact List";
-"项目交付包 ZIP 关闭失败：%@，%@" = "Project delivery package ZIP close failed: %@, %@";
-"项目交付包临时文件清理失败：%@，%@" = "Project delivery package temporary file cleanup failed: %@, %@";
-"项目交付包写入原件失败：%@ -> %@，%@" = "Project delivery package failed to write source file: %@ -> %@, %@";
-"项目交付包写入生成文件失败：%@，%@" = "Project delivery package failed to write generated file: %@, %@";
-"项目交付包缺少图纸原件：%@" = "Project delivery package is missing original drawing: %@";
-"项目交付包缺少现场照片原件：%@" = "Project delivery package is missing original site photo: %@";
-"项目交付包缺少票据原件：%@" = "Project delivery package is missing original receipt: %@";
-"项目交付包缺少随手记附件原件：%@" = "Project delivery package is missing original quick note attachment: %@";
 "项目负责人: ____________________" = "Project manager: ____________________";
 "关联票据文件 %lld 个" = "Linked receipt files: %lld";
 "删除施工进度任务 %lld 条" = "Delete %lld construction progress tasks";
@@ -2084,8 +1753,6 @@
 "备份 ZIP 使用了当前不支持的数据描述符。" = "The backup ZIP uses a data descriptor that is not currently supported.";
 "备份 ZIP 内存在无法识别的文件名。" = "The backup ZIP contains a file name that cannot be read.";
 "已取消导入。" = "Import canceled.";
-"本地数据解析失败，已保留异常文件：%@。可从备份页重新导入最近备份。" = "Local data could not be parsed. The problem file was preserved as %@. You can re-import a recent backup from the Backup page.";
-"读取本地数据失败：%@" = "Failed to read local data: %@";
 "保存本地数据失败：%@" = "Failed to save local data: %@";
 "当前发布环境已关闭示例数据导入。" = "Sample data import is disabled in the current release environment.";
 "正在并行删除照片/图纸/资料/附件" = "Deleting photos, drawings, documents, and attachments in parallel";
@@ -2093,7 +1760,6 @@
 "正在写入空数据" = "Writing empty data";
 "清空完成" = "Clear completed";
 "云端保留数量" = "Cloud Retention";
-"超过保留数量后，会自动删除最旧的 iCloud 备份。" = "When the limit is exceeded, the oldest iCloud backup is deleted automatically.";
 "保留最近 %lld 份" = "Keep latest %lld backups";
 "识别到 %lld 个金额候选，请点选确认：" = "%lld amount candidates detected. Tap one to confirm:";
 "回填金额：%@" = "Apply amount: %@";
@@ -2148,7 +1814,6 @@
 "形成 %@" = "Dated %@";
 "责任人 %@" = "Owner %@";
 "进度条数" = "Progress items";
-"选择格式与导出内容模块" = "Choose format and export content modules";
 "随手记条数" = "Quick note items";
 "项目票据资料" = "Project receipts/documents";
 "预览扫描件" = "Preview scan";
@@ -2182,8 +1847,6 @@
 "原文件已暂存" = "Original files staged";
 "检查%@ %@" = "Checking %@ %@";
 "打包%@ %@" = "Packing %@ %@";
-"读取备份暂存目录失败：%@" = "Failed to read backup staging directory: %@";
-"提交原文件失败：%@" = "Failed to commit original file: %@";
 "%@ 备份包" = "%@ Backup Package";
 "备份格式: schema %lld" = "Backup schema: %lld";
 "应用版本: %@ (%@)" = "App version: %@ (%@)";
@@ -2223,7 +1886,6 @@
 "审计日志条数" = "Audit log records";
 "将恢复到本机的原文件" = "Original Files to Restore Locally";
 "该备份不包含独立原文件，导入时只会恢复数据索引。" = "This backup contains no standalone original files, so import will restore data indexes only.";
-"这些原文件会随导入一起恢复到本机。" = "These original files will be restored locally with the import.";
 "若选择覆盖，将移除的本机原文件" = "Local Original Files Removed by Overwrite";
 "当前本机没有会被这份备份移除的原文件。" = "No local original files would be removed by this backup.";
 "仅覆盖导入会执行这一步；合并导入不会删除现有原文件。" = "Only overwrite import performs this step; merge import does not delete existing original files.";
@@ -2261,7 +1923,6 @@
 "待办已清空" = "Todos complete";
 "备份有效" = "Backup current";
 "原件齐全" = "Original files complete";
-"票据、图纸、待办、备份和原件检查均已通过。" = "Receipts, drawings, todos, backup, and original-file checks all passed.";
 "需处理：%@" = "Needs attention: %@";
 "尚未记录成功备份" = "No successful backup recorded";
 "今天已备份，提醒阈值 %lld 天" = "Backed up today; reminder threshold is %lld days";
@@ -2274,7 +1935,6 @@
 "还有 %lld 条现场待办未完成。" = "%lld site todos are still open.";
 "交付包引用的本机原件均可找到。" = "All local original files referenced by the package are available.";
 "检测到 %lld 个资料原件缺失。" = "%lld original document files are missing.";
-"票据、图纸、待办、备份和原件检查均已通过，可执行最终交付。" = "Receipts, drawings, todos, backup, and original-file checks all passed. Final delivery is ready.";
 "核心交付项已通过，另有 %lld 项建议检查。" = "Core delivery checks passed; %lld advisory items remain.";
 "还有 %lld 条待办未完成" = "%lld todos are still open";
 "最近备份" = "Latest backup";
@@ -2286,9 +1946,6 @@
 "quick_note_composer_done_button" = "Hide Keyboard";
 "quick_note_composer_link_project_picker_title" = "Linked project";
 "quick_note_composer_no_project_option" = "No linked project";
-"quick_note_composer_pick_project_accessibility_label" = "Choose linked project";
-"quick_note_composer_linked_project_accessibility_label" = "Linked to project %@";
-"quick_note_composer_clear_draft_accessibility_label" = "Clear draft";
 "quick_note_composer_project_picker_title" = "Project";
 "quick_note_composer_discard_draft_button" = "Discard draft";
 "quick_note_composer_full_placeholder" = "Record site details, client requests, or temporary ideas";
@@ -2374,7 +2031,6 @@
 "quick_note_drawing_keep_editing_button" = "Keep Editing";
 "quick_note_drawing_canvas_accessibility_label" = "Drawing canvas";
 "quick_note_drawing_canvas_accessibility_hint" = "Drag on the canvas to draw markup";
-"%@更多操作" = "More actions for %@";
 
 /* Lighting planner and watermark camera */
 "%@ · %lld 条" = "%@ · %lld items";
@@ -2419,40 +2075,25 @@
 "wm_camera_album_permission_settings_error" = "No photo-library write permission, please enable it in Settings.";
 "wm_camera_album_permission_unknown_error" = "Unable to confirm photo-library permission.";
 "wm_camera_alert_cannot_continue_title" = "Cannot Continue";
-"wm_camera_attach_project_document_button" = "Attach to Project Docs";
-"wm_camera_attach_project_document_success" = "Attached to project documents.";
 "wm_camera_auto_open_log_draft_toggle" = "Auto-open Daily Log Draft";
 "wm_camera_auto_save_album_toggle" = "Auto-save to Photos";
-"wm_camera_burst_count_indicator_format" = "Burst x%d";
 "wm_camera_burst_count_stepper_format" = "Burst Count: %d";
-"wm_camera_burst_progress_text_format" = "Burst %d photos, currently processing #%d";
 "wm_camera_capture_button" = "Capture Watermarked Photo";
 "wm_camera_capture_empty_result_error" = "No photo captured, please try again.";
 "wm_camera_capture_failed_format" = "Capture failed: %@";
 "wm_camera_capture_meta_with_tag_format" = "%@ · %@ · %@";
 "wm_camera_capture_meta_without_tag_format" = "%@ · %@";
-"wm_camera_capture_photo_first_message" = "Please capture a watermarked photo first.";
-"wm_camera_capture_success_toast_format" = "Captured %d photo(s), continue processing.";
-"wm_camera_clear_photos_menu" = "Clear Photos";
 "wm_camera_close_button" = "Close";
-"wm_camera_convert_to_after_fix_todo_menu" = "Convert to After-Fix Todo";
-"wm_camera_convert_to_before_fix_todo_menu" = "Convert to Before-Fix Todo";
 "wm_camera_corrupted_photo_data_error" = "Photo data is corrupted. Please retry.";
 "wm_camera_current_project_title" = "Current Project";
 "wm_camera_default_tag" = "Site Record";
 "wm_camera_device_unavailable_error" = "Camera is unavailable on this device.";
-"wm_camera_enter_daily_log_menu" = "Open Daily Log";
-"wm_camera_export_button" = "Export";
 "wm_camera_export_default_name" = "WatermarkPhoto";
-"wm_camera_export_photo_failed" = "Photo export failed.";
-"wm_camera_export_photo_failed_format" = "Photo export failed: %@";
 "wm_camera_export_photo_success" = "Photo exported.";
 "wm_camera_export_quality_high" = "High";
 "wm_camera_export_quality_picker" = "Export Quality";
 "wm_camera_export_quality_standard" = "Standard";
 "wm_camera_flash_default_toggle" = "Default Flash";
-"wm_camera_flash_off_text" = "Flash: Off";
-"wm_camera_flash_on_text" = "Flash: On";
 "wm_camera_go_to_settings_button" = "Open Settings";
 "wm_camera_info_section_title" = "Watermark Info";
 "wm_camera_init_failed_error" = "Camera initialization failed.";
@@ -2460,37 +2101,17 @@
 "wm_camera_location_failed" = "Location failed. Fill manually.";
 "wm_camera_location_fetching" = "Fetching current location";
 "wm_camera_location_field" = "Location / Position";
-"wm_camera_location_filled_coordinates" = "Coordinates filled";
-"wm_camera_location_filled_current" = "Current location filled";
 "wm_camera_location_permission_disabled" = "Location permission is disabled. Fill manually.";
 "wm_camera_location_requesting_permission" = "Requesting location permission";
 "wm_camera_location_service_disabled" = "Location service is disabled";
 "wm_camera_location_unavailable" = "Unable to get location. Fill manually.";
 "wm_camera_log_draft_default_content" = "Watermark photo record";
 "wm_camera_log_draft_with_tag_format" = "Watermark photo record: %@";
-"wm_camera_more_menu" = "More";
 "wm_camera_nav_title" = "Watermark Camera";
-"wm_camera_no_log_draft_title" = "No log draft";
-"wm_camera_no_photo_message" = "After capture, you can directly export watermarked JPEG.";
-"wm_camera_no_photo_title" = "No photos yet";
 "wm_camera_permission_denied_error" = "Camera permission is not granted.";
 "wm_camera_permission_not_enabled_settings_error" = "Camera permission disabled. Enable it in Settings.";
 "wm_camera_permission_request_first_error" = "Please authorize camera permission first, then reopen camera.";
-"wm_camera_photo_note_capture_time_format" = "Capture Time: %@";
-"wm_camera_photo_note_location_format" = "Location: %@";
-"wm_camera_photo_note_photographer_format" = "Photographer: %@";
-"wm_camera_photo_note_source" = "Source: Watermark Camera";
-"wm_camera_photo_note_tag_format" = "Tag: %@";
 "wm_camera_photographer_field" = "Photographer";
-"wm_camera_pick_project_first_error" = "Please choose a project first.";
-"wm_camera_project_association_format" = "Project: %@";
-"wm_camera_project_document_title_format" = "Watermark Photo-%@";
-"wm_camera_recent_capture_section_title" = "Recent Capture";
-"wm_camera_save_album_button" = "Save to Photos";
-"wm_camera_save_album_failed_format" = "Failed to save to album: %@";
-"wm_camera_save_album_multi_success_format" = "Saved %d photos to album.";
-"wm_camera_save_album_single_success" = "Saved to album.";
-"wm_camera_save_all_button" = "Save All";
 "wm_camera_settings_section_title" = "Camera Settings";
 "wm_camera_show_grid_toggle" = "Camera Grid";
 "wm_camera_tag_field" = "Tag";
@@ -2559,10 +2180,8 @@
 "限定日期范围" = "Limit Date Range";
 "项目类型" = "Project Type";
 "PDF 可预览" = "PDF preview available";
-"先导入 DWG / DXF / PDF 图纸原件，后续按项目、版本和当前版管理。" = "Import original DWG / DXF / PDF drawings first, then manage them by project, version, and current status.";
 "先导入 DWG / DXF / PDF 图纸原件，App 负责台账、版本、当前版和交付导出；DWG/DXF 通过外部专业看图软件打开。" = "Import original DWG / DXF / PDF drawings first. The app manages the register, versions, current version, and delivery export; DWG/DXF opens in an external professional viewer.";
 "删除后将无法在项目中打开或导出该图纸原件。" = "After deletion, this drawing original can no longer be opened or exported from the project.";
-"原件外部打开" = "Open original externally";
 "可上传 DWG、DXF、PDF；PDF 可系统预览，DWG/DXF 原件需通过外部专业看图软件打开。" = "Upload DWG, DXF, and PDF files. PDFs can use system preview, while DWG/DXF originals must open in an external professional viewer.";
 "图纸能力边界" = "Drawing Capability Boundary";
 "图纸台账 + 外部打开" = "Drawing Register + External Open";
@@ -2590,12 +2209,7 @@
 "同名图纸导入策略" = "Duplicate Drawing Import Strategy";
 "请先创建项目，再导入图纸。" = "Create a project before importing drawings.";
 "检测到同名图纸，请选择导入策略。" = "Detected duplicate drawing names. Please choose an import strategy.";
-"图纸台账导入失败：%@" = "Drawing register import failed: %@";
 "图纸导入失败：%@" = "Drawing import failed: %@";
-"图纸导入失败：%@，%@" = "Drawing import failed: %@, %@";
-"图纸 ZIP 导入失败：%@，%@" = "Drawing ZIP import failed: %@, %@";
-"图纸 ZIP 读取失败：%@，%@" = "Drawing ZIP read failed: %@, %@";
-"图纸原件打开失败：%@，%@" = "Drawing original open failed: %@, %@";
 "ZIP 内没有可导入的图纸" = "No importable drawings in the ZIP";
 "没有可导入的图纸文件，请选择 DWG / DXF / PDF / ZIP。" = "No importable drawing files. Choose DWG, DXF, PDF, or ZIP.";
 "已导入 %lld 份图纸" = "Imported %lld drawings";
@@ -2696,22 +2310,6 @@
 "privacy.policy.unavailable" = "Privacy policy content is temporarily unavailable. Contact support@chengjinfang.com for help.";
 
 /* Project file management */
-"project.files.guide.collapse.accessibility" = "Collapse usage tips";
-"project.files.guide.expand.accessibility" = "Expand usage tips";
-"project.files.guide.close.accessibility" = "Close usage tips";
-"project.files.guide.title" = "Find files faster";
-"project.files.guide.subtitle" = "Filter by project first, review recent files, then use category pages for batch preview and sharing.";
-"project.files.guide.search.title" = "Search projects first";
-"project.files.guide.search.detail" = "The top search supports project names and locations.";
-"project.files.guide.recent.title" = "Review recent files";
-"project.files.guide.recent.detail" = "Recent files are sorted by time, which is best for quick follow-up.";
-"project.files.guide.share.title" = "Open to share";
-"project.files.guide.share.detail" = "Category pages support preview, sharing, and opening.";
-"project.files.categoryGuide.categories.title" = "Browse by category";
-"project.files.categoryGuide.categories.detail" = "Images, drawing originals, receipts, and attachments are managed separately.";
-"project.files.categoryGuide.preview.title" = "Tap to preview";
-"project.files.categoryGuide.preview.detail" = "Use the row menu to preview files and share them quickly.";
-"project.files.action.search" = "Search";
 "project.files.action.preview" = "Preview";
 "project.files.action.openExternalViewer" = "Open in External Professional Viewer";
 "project.files.action.shareOpen" = "Share / Open";
@@ -2893,8 +2491,6 @@
 
 /* Global command search */
 "命令" = "Command";
-"搜索项目、联系人、供应商、材料或命令" = "Search projects, contacts, suppliers, materials, or commands";
-"未找到匹配的项目、联系人、供应商、材料或命令" = "No matching projects, contacts, suppliers, materials, or commands";
 "新建日志" = "New Log";
 "打开施工日志并直接新建一条" = "Open site logs and create a new entry";
 "补票据" = "Attach Receipt";
@@ -2931,7 +2527,6 @@
 "统一完成本地/iCloud 备份、恢复预览与导入校验。" = "Handle local and iCloud backup, restore preview, and import checks in one flow.";
 "按项目或日期筛选后导出 CSV / PDF / HTML。" = "Filter by project or date and export CSV / PDF / HTML.";
 "统一查看健康检查、存储占用、审计记录与清理风险。" = "Review health checks, storage use, audit logs, and cleanup risk together.";
-"把备份健康、导入恢复、导出交付和清理风险收进同一条操作链路，先判断风险，再执行动作。" = "Keep backup health, import restore, delivery export, and cleanup risk in one flow: check risk first, then act.";
 "云备份" = "Cloud Backup";
 "清理风险" = "Cleanup Risk";
 "%lld 条待清理" = "%lld to clean";
@@ -2943,7 +2538,6 @@
 "先生成一份备份" = "Create a Backup First";
 "当前没有成功备份记录，清理、恢复或导入前先生成本地 ZIP 或 iCloud 备份。" = "No successful backup is recorded. Create a local ZIP or iCloud backup before cleanup, restore, or import.";
 "去备份" = "Go to Backup";
-"有计算历史可按策略清理" = "Calculation History Can Be Cleaned";
 "当前可按保留策略清理 %lld 条计算历史，清理前已检测到备份记录。" = "%lld calculation history records can be cleaned by retention policy. A backup record was detected before cleanup.";
 "去清理" = "Go to Cleanup";
 "建议补一次云备份" = "Cloud Backup Recommended";
@@ -2990,7 +2584,6 @@
 "V1" = "V1";
 "有质检要点" = "Has quality points";
 "教程媒体 %lld 个" = "%lld tutorial media files";
-"添加工艺" = "Add Method";
 "删除施工工艺 %lld 条" = "Delete %lld Construction Methods";
 "已删除 %lld 条施工工艺" = "Deleted %lld construction methods";
 "没有匹配联系人" = "No Matching Contacts";
@@ -3025,11 +2618,6 @@
 "清空材料单" = "Clear Material Sheet";
 "编制人" = "Prepared By";
 "选择保存位置或分享给其他人" = "Choose a save location or share with others";
-"wm_camera_save_section_title" = "Save";
-"wm_camera_convert_section_title" = "Convert to Record";
-"wm_camera_clear_photos_confirm_title" = "Clear Captured Photos?";
-"wm_camera_clear_photos_confirm_message" = "This removes captured photos from the watermark camera page. Files already saved to Photos or project documents are not deleted.";
-"wm_camera_clear_photos_confirm_button" = "Clear Photos";
 
 /* Business edit form shell */
 "表单问题" = "Form Issues";
@@ -3087,7 +2675,6 @@
 /* Localization tail cleanup */
 "该项目可能已被删除或尚未同步到本机。" = "This project may have been deleted or not yet synced to this device.";
 "完工交付向导" = "Completion Delivery Guide";
-"导出与交付" = "Export & Delivery";
 "仅删除账目（保留票据）" = "Delete record only (keep receipt)";
 "删除账目并删除票据" = "Delete record and receipt";
 "反馈内容" = "Feedback";
@@ -3241,23 +2828,14 @@
 "toolbox.catalog.methods.desc" = "Standard practices, quality requirements, and safety notes.";
 
 "project.business.core.title" = "Business Core";
-"project.business.quote" = "Quote";
 "project.business.contract" = "Contract";
 "project.business.collected" = "Collected";
-"project.business.uncollected" = "Uncollected";
-"project.business.materialCost" = "Material Cost";
-"project.business.laborCost" = "Labor Cost";
 "project.business.estimatedGrossProfit" = "Estimated Gross Profit";
 "project.business.pending" = "Pending";
 "project.business.insights.title" = "Business Insights";
-"project.business.receivableAge" = "Receivable Age";
 "project.business.recentCollection" = "Recent Collection";
 "project.business.costException" = "Cost Exceptions";
 "project.business.profitRisk" = "Profit Risk";
-"project.business.noReceivable" = "No receivables";
-"project.business.missingCompletionDate" = "Missing completion date";
-"project.business.notDue" = "Not due";
-"project.business.days" = "%lld days";
 "project.business.noRecentCollection" = "No recent collection";
 "project.business.missingContractAmount" = "Missing contract amount";
 "project.business.pendingItems" = "%lld pending";
@@ -3311,7 +2889,6 @@
 "现场待办到期提醒" = "Site Todo Due";
 "应收/应付到期提醒" = "Receivable/Payable Due";
 "未关联项目" = "No linked project";
-"全局搜索项目、待办、日志、随手记或命令" = "Search projects, todos, logs, notes, or commands";
 "未找到匹配的业务记录或命令" = "No matching records or commands";
 
 /* Source localization coverage: construction workflows and data safety. */
@@ -3544,7 +3121,6 @@
 "造价" = "Cost";
 "计算结果" = "Calculation Result";
 "计算历史" = "Calculation History";
-"查看、删除历史计算结果" = "View and delete previous calculations";
 "输入参数" = "Input Parameters";
 "电流计算结果" = "Calculated Current";
 "例如 10" = "e.g. 10";
@@ -3651,7 +3227,6 @@
 "桥架穿线率按截面积估算，常用控制目标不高于 40%。" = "Cable tray fill is estimated by cross-sectional area. A common target is no more than 40%.";
 "请输入 50–10000" = "Enter a value from 50 to 10000";
 "请输入 30–2000" = "Enter a value from 30 to 2000";
-"桥架填充草稿编码后 UTF8 转换失败" = "Could not convert the encoded cable tray fill draft to UTF-8";
 "片" = "pieces";
 "元/kg" = "CNY/kg";
 "辅助估算，现场以规范和专业判断为准。" = "For estimates only. Follow applicable standards and professional judgment on site.";
@@ -3904,13 +3479,9 @@
 "已导出体检清单" = "Readiness checklist exported";
 "搜索项目名称或地点" = "Search Project Name or Location";
 "未找到匹配的项目、地点或客户" = "No Matching Projects, Locations, or Customers";
-"清除概况筛选" = "Clear Overview Filters";
 "搜索与筛选" = "Search and Filters";
 "排序" = "Sort";
 "已删除项目 %@" = "Deleted project %@";
-"没有可展示的进度" = "No Progress to Display";
-"补充任务开始和截止日期后显示。" = "Add task start and due dates to display progress.";
-"%1$@ 至 %2$@" = "%1$@ to %2$@";
 "共 %lld 项" = "%lld items in total";
 "日志" = "Logs";
 "预结算" = "Budget and Settlement";
@@ -4013,6 +3584,8 @@
 "模板项 %lld 类 · 缺项 %lld · 待处理 %lld · 已归档 %lld" = "%lld template categories · %lld missing · %lld pending · %lld archived";
 "备份 ZIP 路径不安全：%@" = "Unsafe path in backup ZIP: %@";
 "备份 ZIP 存在重复文件：%@" = "Duplicate file in backup ZIP: %@";
+"备份中的附件名称存在冲突，已停止恢复。" = "Conflicting attachment names were found in the backup. Restore has stopped.";
+"附件文件名或存储路径不安全，已停止文件操作并保留原数据。" = "The attachment name or storage path is unsafe. The operation has stopped and the original data has been preserved.";
 "备份 ZIP 文件校验失败：%@" = "Backup ZIP checksum failed: %@";
 "备份 ZIP 超出安全限制：%@" = "Backup ZIP exceeds safety limits: %@";
 "ZIP 路径无效：%@" = "Invalid ZIP path: %@";
@@ -4055,7 +3628,6 @@
 "原合同金额" = "Previous contract amount";
 "新合同金额" = "New contract amount";
 "逐项优先采用转合同金额；未填写时采用含税折后报价金额。搜索条件不会影响本次写入。" = "Each line uses its contract amount when provided, otherwise its quoted amount after tax and discount. Search filters do not affect this operation.";
-"有 %lld 项既未填写转合同金额，也未填写报价单价，请先补价。" = "%lld items have neither a contract amount nor a quoted unit price. Complete their prices first.";
 "未找到工程" = "Project not found";
 "当前工程没有可写入合同的已确认报价。" = "This project has no confirmed quotes available for its contract.";
 "选择已确认报价版本写入项目合同金额" = "Choose a confirmed quote version for the project contract amount";
@@ -4149,14 +3721,12 @@
 "副本保留附件引用，当前支持文字编辑。副本不包含附件文件，也不属于完整备份。" = "The copy retains attachment references and supports text editing. Attachment files are not included; this is not a complete backup.";
 "副本施工日志" = "Copy: daily logs";
 "副本项目" = "Copy: projects";
-"在独立副本中试用项目与日志。修改仅保存在所选副本中；原应用数据继续独立使用。" = "Try projects and daily logs in an independent copy. Changes are saved only in the selected copy. Original app data remains separate.";
 "按项目开工日期排序" = "Sorted by project start date";
 "搜索日志文字" = "Search log text";
 "搜索项目名称、地址或联系人" = "Search project names, locations or contacts";
 "操作失败：%@" = "Operation failed: %@";
 "放弃当前编辑？" = "Discard current edits?";
 "放弃编辑" = "Discard edits";
-"数据已变化，已回到第一页。" = "Data changed. Returned to the first page.";
 "整改情况" = "Rectification";
 "施工人数" = "Worker count";
 "日期顺序" = "Date order";
@@ -4181,7 +3751,6 @@
 "预计完工日期" = "Expected completion date";
 "试用功能" = "Trial features";
 
-"在独立副本中试用项目、日志与财务。修改仅保存在所选副本中；原应用数据继续独立使用。" = "Try projects, daily logs, and financial records in an independent copy. Changes are saved only in the selected copy. Original app data remains separate.";
 
 "副本财务记录" = "Copy: financial records";
 
@@ -4265,13 +3834,10 @@
 
 "仓储记录" = "Warehouse records";
 
-"在独立副本中试用项目、日志、财务与仓储。修改仅保存在所选副本中；原应用数据继续独立使用。" = "Try projects, logs, finances, and warehouse records in an independent copy. Changes are saved only in the selected copy; original app data remains separate.";
 
 "库存" = "Stock";
 
-"在独立副本中试用项目、日志、财务、仓储与材料清单。修改仅保存在所选副本中；原应用数据继续独立使用。" = "Try projects, logs, finances, warehouse records and materials in a separate copy. Changes stay in the selected copy; the main app continues to use its own data.";
 
-"请填写材料名称和大于零的数量。单价可留空或填写非负数，金额须能精确计算。" = "Enter a material name and a quantity greater than zero. Leave the unit price blank or enter a nonnegative number. Amounts must be exactly calculable.";
 
 "按进场日期文字排序，未填日期排在最早。" = "Sorted by arrival date text, with blank dates first in ascending order.";
 
@@ -4495,7 +4061,6 @@
 "生成记账草稿" = "Create bookkeeping draft";
 "登记实际收付" = "Record actual payment";
 "第 %lld / %lld 页" = "Page %lld of %lld";
-"累计到货" = "Received to date";
 "计划名称" = "Plan name";
 "计划数量" = "Planned quantity";
 "计划金额不计入经营汇总，只有登记的正式收付才会计入。" = "Plans are excluded from business totals. Only recorded, confirmed payments count.";
@@ -4522,7 +4087,6 @@
 "%@信息" = "%@ details";
 "上次填写的位置，请核对" = "Previously entered location. Please verify.";
 "上次定位（%@），请核对或重新定位" = "Previous location fix (%@). Verify or locate again.";
-"事项已保存，但未保留整改后照片，本次照片仍在水印相机草稿中。" = "The item was saved without the after photo. This photo remains in Watermark Camera drafts.";
 "事项归属或整改证据已变化，请重新选择。" = "The item's project or rectification evidence changed. Select it again.";
 "位置" = "Location";
 "保存副本" = "Save Copy";
@@ -4565,7 +4129,6 @@
 "开" = "On";
 "待存相册" = "Not saved to Photos";
 "待归档" = "Not archived";
-"所选水印照片预览" = "Selected watermarked photo preview";
 "所选照片写入日志" = "Add Selected Photos to Log";
 "所选照片已按拍摄项目归档。" = "Selected photos were archived to their capture projects.";
 "手动填写的位置" = "Manually entered location";
@@ -4743,7 +4306,6 @@
 "采购口径" = "Purchasing Basis";
 
 /* iPad dashboard independent overview pane */
-"工作概况" = "Work overview";
 
 /* Expanded phone workspaces */
 "quick_note_workspace_all" = "All quick notes";
@@ -5066,7 +4628,6 @@
 "未确认，不可作为已确认金额依据" = "UNCONFIRMED — not evidence of an agreed amount";
 "未纳入期间：日期不明日志 %lld 条、完成日期不明待办 %lld 项。" = "Excluded from this period: %lld logs with unknown dates and %lld completed to-dos with unknown completion dates.";
 "本单仅为本机记录，不代表甲方签章；增项金额独立记录，不计入合同金额、经营汇总或结算。" = "This is a local record and does not represent the client's signature or seal. Change amounts are independent and do not affect the contract amount, business totals, or settlement.";
-"本报告毛利估算＝合同金额－材料明细合计－人工明细合计；不等于最终利润，其他支出需另行核对。" = "This report estimates gross profit as the contract amount minus itemized material and labor costs. It is not final profit; reconcile other expenses separately.";
 "本文件是独立照片附件。缺失或无法读取的照片显示为空白占位，不能作为已附照片凭证。" = "This is a separate photo attachment. Missing or unreadable photos appear as blank placeholders and do not constitute attached photographic evidence.";
 "本期收款合计：%@" = "Total received during this period: %@";
 "本期正式收款" = "Formal receipts during this period";
@@ -5076,7 +4637,6 @@
 "本期间没有正式收款记录。" = "There are no formal collection records in this period.";
 "本次复验备注" = "Notes for this review";
 "本项目暂无可关联资料" = "No documents available in this project";
-"毛利估算＝合同金额－材料成本－人工成本；不等于最终利润，其他支出需另行核对。成本有明细时采用明细，否则采用手填金额。" = "Estimated gross profit = contract amount minus material and labor costs. This is not final profit; reconcile other expenses separately. Itemized costs take precedence, with manual amounts used when no items exist.";
 "照片文件缺失" = "Photo file missing";
 "照片通过独立照片 PDF 预览和分享，正文 PDF 不含图片。缺失或无法读取的照片会保留占位提示。" = "Preview and share photos in a separate photo PDF. The text PDF contains no images. Missing or unreadable photos retain placeholders.";
 "现场汇报与核对" = "Site reports and checks";
@@ -5194,3 +4754,127 @@
 "report_pdf_financial_line_format" = "- %@ [%@] [%@] [%@]%@ %@  %@  Receipts: %lld";
 "report_pdf_document_line_format" = "- %@ [%@] %@  Pages: %lld  %@  %@";
 "report_pdf_quick_note_line_format" = "- %@  %@  Attachments: %lld";
+"工艺包内容超过支持的大小或数量限制。" = "The method pack exceeds the supported size or item limit.";
+"图纸版本号已达到上限，无法创建新版本。" = "The drawing version number has reached its limit; cannot create a new version.";
+"请至少选择一项导出内容。" = "Please select at least one export item.";
+"操作审计日志不区分项目，仅支持在“全部项目”范围导出。" = "Operation audit logs are not project-specific and can only be exported under \"All Projects\".";
+"原版本号超出可编辑范围，保存时将保留原值。" = "The original version number is outside the editable range and will be preserved on save.";
+"上一版版本号已达到上限，请选择其他版本或取消替换。" = "The previous version number has reached its limit. Please choose another version or cancel replacement.";
+"数据包含重复的记录标识，无法安全读取。请使用其他备份。" = "The data contains duplicate record identifiers and cannot be read safely. Please use another backup.";
+
+/* Report headers, delivery package, and engineering calculator keys */
+"   - 图纸原件: %lld 份" = "   - Original drawings: %lld";
+"   - 已归档: %lld 份" = "   - Archived: %lld";
+"   - 当前版图纸: %lld 份" = "   - Current drawings: %lld";
+"   - 当前版缺失: %lld 组" = "   - Missing current version: %lld groups";
+"   - 待处理: %lld 份" = "   - Pending: %lld";
+"   - 未关闭问题: %lld 项" = "   - Open issues: %lld";
+"   - 结果: 仍有图纸问题未关闭" = "   - Result: Open drawing issues remain";
+"   - 结果: 无未关闭图纸问题" = "   - Result: No open drawing issues";
+"   - 缺失图纸: %@" = "   - Missing drawings: %@";
+"   - 缺失图纸原件: %lld 项" = "   - Missing drawing files: %lld";
+"   - 缺项: %lld 类" = "   - Missing categories: %lld";
+"   - 覆盖: %lld/%lld 类" = "   - Coverage: %lld/%lld categories";
+"   - 退回修改: %lld 份" = "   - Returned for revision: %lld";
+"%@ (%@)" = "%@ (%@)";
+"%@ / %@" = "%@ / %@";
+"%@ V" = "%@ V";
+"%@ kW" = "%@ kW";
+"%@ kg" = "%@ kg";
+"%@ kg/m" = "%@ kg/m";
+"%@ m" = "%@ m";
+"%@ mm²" = "%@ mm²";
+"%@ m²" = "%@ m²";
+"%@ m³" = "%@ m³";
+"%@ t" = "%@ t";
+"%@ × %@ mm" = "%@ × %@ mm";
+"%@ × %@ mm, %lld 种电缆" = "%@ × %@ mm, %lld cable types";
+"%@ × %lld 根" = "%@ × %lld pcs";
+"%@ Ω" = "%@ Ω";
+"%@ 元" = "CNY %@";
+"%@%%" = "%@%%";
+"%@, %@" = "%@, %@";
+"%@, %@ × %@ 根" = "%@, %@ × %@ pcs";
+"%@, %@, %@" = "%@, %@, %@";
+"%@×%@ m, %@ cm, %@" = "%@×%@ m, %@ cm, %@";
+"%@×%@ m, %@×%@ mm" = "%@×%@ m, %@×%@ mm";
+"%@回路按计算电流 × %@ 估算整定值，正式选型仍需结合线路保护和上级配合。" = "%@ circuit setting is estimated as design current × %@; final selection must coordinate line protection and upstream devices.";
+"%lld 片" = "%lld pcs";
+"%lld 箱" = "%lld boxes";
+"%lld 袋" = "%lld bags";
+"10. 签字页" = "10. Signatures";
+"4. 施工资料清单" = "4. Construction Document Checklist";
+"5. 未关闭图纸问题" = "5. Open Drawing Issues";
+"6. 施工资料清单" = "6. Construction Document Checklist";
+"6. 联系人" = "6. Contacts";
+"7. 未结清账目" = "7. Unsettled Accounts";
+"7. 票据索引" = "7. Receipt & Document Index";
+"8. 联系人与随手记" = "8. Contacts & Quick Notes";
+"9. 照片页" = "9. Photos";
+"ΔU = I × (ρ × 有效长度 ÷ 截面积)；压降率 = (ΔU ÷ 额定电压) × 100%。" = "ΔU = I × (ρ × effective length ÷ area); voltage drop = (ΔU ÷ rated voltage) × 100%.";
+"Φ%@ mm" = "Φ%@ mm";
+"Φ%@ mm, %@ m × %@ 根" = "Φ%@ mm, %@ m × %@ pcs";
+"三相" = "Three-phase";
+"三相按 I = P ÷ (√3 × U × cosφ) 估算，功率输入单位为 kW。" = "Three-phase estimated via I = P ÷ (√3 × U × cosφ), with power P in kW.";
+"余%@" = "Rem %@";
+"公司" = "Company";
+"关联单据数" = "Linked Docs";
+"关联待办未关闭" = "Linked to-do open";
+"关联票据数" = "Linked Receipts";
+"关联账目ID" = "Linked Finance ID";
+"写入交付前体检明细" = "Writing pre-delivery inspection details";
+"写入当前版图纸清单" = "Writing current drawing register";
+"写入施工资料清单" = "Writing construction document checklist";
+"写入未关闭图纸问题" = "Writing open drawing issues";
+"写入缺失图纸检查" = "Writing missing drawing check";
+"净方量 = 长 × 宽 × 厚(cm) ÷ 100；含损耗方量 = 净方量 × (1 + 损耗%)。" = "Net volume = L × W × thickness(cm) ÷ 100; total volume = net volume × (1 + waste%).";
+"净面积 %@" = "Net area %@";
+"净面积 = 墙体总周长 × 层高 - 门窗总面积。" = "Net area = wall perimeter × story height - opening area.";
+"利用率 %.1f%%" = "Utilization %.1f%%";
+"单位重 = d² ÷ 162；总重 = 单位重 × 单根长度 × 根数。" = "Unit weight = d² ÷ 162; total weight = unit weight × bar length × count.";
+"单相" = "Single-phase";
+"单相按 I = P ÷ (U × cosφ) 估算，功率输入单位为 kW。" = "Single-phase estimated via I = P ÷ (U × cosφ), with power P in kW.";
+"压降 %@%%" = "Voltage drop %@%%";
+"原件存在" = "Original file present";
+"后续版本ID" = "Replaced By ID";
+"含损耗 %@" = "Incl. waste %@";
+"填充率 %@" = "Fill ratio %@";
+"填充率 = 电缆总截面积 ÷ 桥架截面积 × 100%。" = "Fill ratio = total cable area ÷ tray area × 100%.";
+"对方单位" = "Counterparty";
+"层高 %@" = "Story height %@";
+"已超出规范（>40%）" = "Exceeds code limit (>40%)";
+"建议配置 30mA 漏电保护。" = "30mA residual-current protection is recommended.";
+"当前版图纸清单" = "Current Drawing Register";
+"所有图纸组均已标记当前版。" = "All drawing groups have a current version marked.";
+"按现场方案和保护分级要求选配。" = "Select per site plan and protection coordination requirements.";
+"排料图形示意" = "Cutting Layout Diagram";
+"推荐 %lldA / %@" = "Recommended %lldA / %@";
+"整定值 = 计算电流 × 负载系数；断路器规格取不小于整定值的最小标准档。" = "Setting = design current × load factor; choose the smallest standard breaker rating ≥ setting.";
+"施工资料清单: 覆盖 %lld/%lld 类  缺项 %lld 类  待处理 %lld 份" = "Document checklist: %lld/%lld categories covered  missing %lld  pending %lld";
+"更新时间" = "Updated At";
+"替换上一版ID" = "Replaces ID";
+"片数 = ceil(含损耗面积 ÷ 单片面积)；箱数 = ceil(片数 ÷ 每箱片数)。" = "Pieces = ceil(area incl. waste ÷ tile area); boxes = ceil(pieces ÷ pieces per box).";
+"状态检查时间" = "Status Checked At";
+"电流 %@" = "Current %@";
+"穿线率 %@" = "Conduit fill %@";
+"穿线率 = 导线总截面积 ÷ 线管截面积 × 100%。" = "Conduit fill = total wire area ÷ conduit area × 100%.";
+"符合规范（≤40%）" = "Compliant (≤40%)";
+"第 %lld 项电缆：%@" = "Cable #%lld: %@";
+"缺失图纸检查" = "Missing Drawing Check";
+"覆盖 %lld/%lld 类 · 缺项 %lld · 待处理 %lld · 已归档 %lld" = "Coverage %lld/%lld · Missing %lld · Pending %lld · Archived %lld";
+"计算整定值 %@ 已超出 250A 标准表，请按设计选用更高规格并校核保护配合。" = "Calculated setting %@ exceeds the 250A standard table; select a higher rating per design and verify protection coordination.";
+"请输入 0–30" = "Enter 0–30";
+"请输入 100–2000" = "Enter 100–2000";
+"请输入 1–100000" = "Enter 1–100000";
+"请输入 4–80" = "Enter 4–80";
+"请输入标准电缆截面，或从常用截面中选择。" = "Enter a standard cable cross-section or pick a common size.";
+"资料数" = "Documents";
+"超出常用规格，请复核设计。" = "Exceeds common ratings; please review design.";
+"超出规范（>40%）" = "Exceeds code limit (>40%)";
+"载流量 %@，当前电流已偏大。" = "Ampacity %@; current is too high.";
+"载流量 %@，满足校核。" = "Ampacity %@; check passed.";
+"输出值 = 输入值 × 源单位系数 ÷ 目标单位系数。" = "Output = input × source factor ÷ target factor.";
+"问题备注" = "Issue Note";
+"附件数" = "Attachments";
+"需要留票的账目均已关联票据或资料。" = "All records requiring receipts are linked to receipts or documents.";
+"项目ID" = "Project ID";

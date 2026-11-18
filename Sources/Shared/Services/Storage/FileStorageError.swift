@@ -1,6 +1,7 @@
 import Foundation
 
 enum FileStorageError: LocalizedError, Equatable {
+    case unsafeAttachmentPath(String)
     case invalidImageData
     case imageEncodingFailed
     case unsupportedFileType(String)
@@ -12,6 +13,8 @@ enum FileStorageError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
+        case .unsafeAttachmentPath:
+            return AppLocalization.string("附件文件名或存储路径不安全，已停止文件操作并保留原数据。")
         case .invalidImageData:
             return AppLocalization.string("无法识别图片数据。")
         case .imageEncodingFailed:

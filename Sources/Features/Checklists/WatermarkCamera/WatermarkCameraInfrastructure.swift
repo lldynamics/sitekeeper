@@ -275,8 +275,8 @@ private struct WatermarkCameraPreview: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PreviewContainerView {
         let view = PreviewContainerView()
-        view.previewLayer.session = session
-        view.previewLayer.videoGravity = .resizeAspectFill
+        view.previewLayer?.session = session
+        view.previewLayer?.videoGravity = .resizeAspectFill
         view.onRotation = onRotation
         view.onFocus = onFocus
         return view
@@ -295,7 +295,7 @@ private final class PreviewContainerView: UIView {
     private let focusRing = UIView()
 
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
-    var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+    var previewLayer: AVCaptureVideoPreviewLayer? { layer as? AVCaptureVideoPreviewLayer }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -314,7 +314,7 @@ private final class PreviewContainerView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         let angle = WatermarkCameraFraming.rotationAngle(for: window?.windowScene?.interfaceOrientation ?? .portrait)
-        if let connection = previewLayer.connection, connection.isVideoRotationAngleSupported(angle) {
+        if let connection = previewLayer?.connection, connection.isVideoRotationAngleSupported(angle) {
             connection.videoRotationAngle = angle
         }
         onRotation?(angle)
@@ -322,7 +322,9 @@ private final class PreviewContainerView: UIView {
 
     @objc private func focus(_ gesture: UITapGestureRecognizer) {
         let location = gesture.location(in: self)
-        onFocus?(previewLayer.captureDevicePointConverted(fromLayerPoint: location))
+        if let previewLayer {
+            onFocus?(previewLayer.captureDevicePointConverted(fromLayerPoint: location))
+        }
         focusRing.layer.removeAllAnimations()
         focusRing.frame = CGRect(x: location.x - 30, y: location.y - 30, width: 60, height: 60)
         focusRing.alpha = 1

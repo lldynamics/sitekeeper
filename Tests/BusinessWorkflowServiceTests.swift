@@ -7,7 +7,7 @@ struct BusinessWorkflowServiceTests {
     enum Failure: Error { case injected }
 
     @Test func partialReceiptsKeepPlannedQuantityAndStockSeparatesUnitAndProject() async throws {
-        let store = WorkflowTestStore()
+        let store = InMemoryBusinessWorkflowStore()
         let project = Project(name: "A", location: "")
         store.projects = [project]
         let material = MaterialItem(name: "Cable", quantity: 10, unit: "m", unitPrice: 2, projectId: project.id)
@@ -119,7 +119,7 @@ struct BusinessWorkflowServiceTests {
     }
 
     @Test func receiptSaveUsesCurrentSourceAndNeverPostsMoneyOrChangesPurchaseStatus() async throws {
-        let store = WorkflowTestStore()
+        let store = InMemoryBusinessWorkflowStore()
         let project = Project(name: "A", location: "")
         store.projects = [project]
         let original = MaterialItem(name: "Cable", quantity: 10, unit: "m", purchaseStatus: .arrived, projectId: project.id)
@@ -140,7 +140,7 @@ struct BusinessWorkflowServiceTests {
     }
 
     @Test func ledgerDraftKeepsDocumentsCostAndIdempotencyAndDoesNotPostCash() async throws {
-        let store = WorkflowTestStore()
+        let store = InMemoryBusinessWorkflowStore()
         let project = Project(name: "A", location: "")
         store.projects = [project]
         let document = ProjectDocument(projectId: project.id, title: "Delivery", fileName: "delivery.pdf")
@@ -158,7 +158,7 @@ struct BusinessWorkflowServiceTests {
     }
 
     @Test func staleSourcesAndBrokenAttachmentsCannotGenerateCash() async throws {
-        let store = WorkflowTestStore()
+        let store = InMemoryBusinessWorkflowStore()
         let project = Project(name: "A", location: "")
         store.projects = [project]
         let material = MaterialItem(name: "Cable", quantity: 10, unit: "m", projectId: project.id)
@@ -172,7 +172,7 @@ struct BusinessWorkflowServiceTests {
     }
 
     @Test func failedReceiptAndLedgerSaveRollBackOnlyTheirOwnChangesThenRetry() async throws {
-        let store = WorkflowTestStore()
+        let store = InMemoryBusinessWorkflowStore()
         let project = Project(name: "A", location: "")
         store.projects = [project]
         let material = MaterialItem(name: "Cable", quantity: 10, unit: "m", projectId: project.id)
@@ -198,7 +198,7 @@ struct BusinessWorkflowServiceTests {
     }
 
     @Test func failedPlanSavePreservesOtherProjectEditsAndBlocksInterleavedPayment() async throws {
-        let store = WorkflowTestStore()
+        let store = InMemoryBusinessWorkflowStore()
         let project = Project(name: "A", location: "")
         store.projects = [project]
         let plan = ProjectPaymentPlan(title: "Contract", direction: .income, counterparty: "Customer", installments: [ProjectPaymentInstallment(title: "Deposit", dueDate: .today(), amount: 100)])
@@ -219,7 +219,7 @@ struct BusinessWorkflowServiceTests {
     }
 
     @Test func partialCashRollbackRetryAndOverpayGuardUseCurrentRemainingAmount() async throws {
-        let store = WorkflowTestStore()
+        let store = InMemoryBusinessWorkflowStore()
         let plan = ProjectPaymentPlan(title: "Contract", direction: .expense, counterparty: "Supplier", installments: [ProjectPaymentInstallment(title: "First", dueDate: .today(), amount: 100)])
         let project = Project(name: "A", location: "", paymentPlans: [plan])
         store.projects = [project]
@@ -241,28 +241,72 @@ struct BusinessWorkflowServiceTests {
         #expect(ProjectPaymentMetrics.summaries(project: project, records: store.projectFinancialRecords).first?.remaining.isZero == true)
         #expect(ProjectFinancialMetrics.summary(store.projectFinancialRecords).expense == 100)
     }
-}
 
-/// A deliberately small port double: real services perform all business validation,
-/// identity checks and rollback. Native DataStore/disk integration is tested separately.
-@MainActor
-private final class WorkflowTestStore: BusinessWorkflowStore {
-    var projects: [Project] = []
-    var materialItems: [MaterialItem] = []
-    var projectWarehouseMovements: [ProjectWarehouseMovement] = []
-    var projectFinancialRecords: [ProjectFinancialRecord] = []
-    var projectDocuments: [ProjectDocument] = []
-    var savingPaymentProjects: Set<UUID> = []
-    func awaitInitialLoad() async {}
-    func requireBusinessWritesAllowed() throws {}
-    func flushSaveOrThrow() async throws {}
-    @discardableResult func updateProject(_ value: Project) -> Bool {
-        guard let index = projects.firstIndex(where: { $0.id == value.id }) else { return false }
-        projects[index] = value
-        return true
+    @Test func incomeAllocationEditsUseTheSameCollectionsAsContractAndSchedule() async throws {
+        let store = InMemoryBusinessWorkflowStore()
+        let due = BusinessDateValue(legacyText: "2099-01-01")
+        let plan = ProjectPaymentPlan(title: "Contract", direction: .income, counterparty: "Customer",
+            installments: [ProjectPaymentInstallment(title: "Deposit", dueDate: due, amount: 1000)])
+        let project = Project(name: "A", location: "", contractAmount: 1000, paymentPlans: [plan])
+        store.projects = [project]
+        let record = ProjectFinancialRecord(projectId: project.id, direction: .income, category: .collection, amount: 300,
+            paymentAllocation: ProjectPaymentAllocation(planID: plan.id, installmentID: plan.installments[0].id))
+        try await ProjectPaymentService.recordPayment(record, store: store)
+        for category in [ProjectFinancialCategory.collection, .receipt] {
+            var edited = record
+            edited.category = category
+            // The ordinary financial edit sheet calls this validator before saving.
+            try ProjectPaymentMetrics.validateAllocation(edited, projects: [project], records: [record])
+            let summary = try #require(ProjectPaymentMetrics.summaries(project: project, records: [edited]).first)
+            #expect(summary.isValid && summary.paid == 300 && summary.remaining == 700)
+            #expect(ProjectFinancialMetrics.unpaidAmount(project: project, records: [edited]) == 700)
+            let schedule = ProjectReceivableScheduleSummary(project: project, records: [edited],
+                today: CalendarDay(year: 2099, month: 1, day: 1)!, timeZone: TimeZone(secondsFromGMT: 0)!)
+            #expect(schedule.state == .ready && schedule.dueUnpaidAmount == 700)
+        }
+        for category in [ProjectFinancialCategory.paymentRequest, .other, .refund] {
+            var edited = record
+            edited.category = category
+            #expect(throws: (any Error).self) {
+                try ProjectPaymentMetrics.validateAllocation(edited, projects: [project], records: [record])
+            }
+            edited.id = UUID()
+            await #expect(throws: (any Error).self) { try await ProjectPaymentService.recordPayment(edited, store: store) }
+        }
+        #expect(store.projectFinancialRecords.count == 1 && store.projectFinancialRecords.first?.category == .collection)
     }
-    func appendProjectFinancialRecord(_ value: ProjectFinancialRecord) { projectFinancialRecords.append(value) }
-    func insertProjectWarehouseMovementAtTop(_ value: ProjectWarehouseMovement) { projectWarehouseMovements.insert(value, at: 0) }
-    func rollbackLinkedFinancialRecord(id: UUID) { projectFinancialRecords.removeAll { $0.id == id } }
-    func rollbackLinkedWarehouseMovement(id: UUID) { projectWarehouseMovements.removeAll { $0.id == id } }
+
+    @Test func persistedNoncollectionIncomeLinksRequireReviewInsteadOfSettlingInstallments() throws {
+        var plan = ProjectPaymentPlan(title: "Contract", direction: .income, counterparty: "Customer",
+            installments: [ProjectPaymentInstallment(title: "Deposit", dueDate: BusinessDateValue(legacyText: "2099-01-01"), amount: 1000)])
+        var project = Project(name: "A", location: "", contractAmount: 1000, paymentPlans: [plan])
+        for category in [ProjectFinancialCategory.paymentRequest, .other] {
+            let record = ProjectFinancialRecord(projectId: project.id, direction: .income, category: category, amount: 300,
+                paymentAllocation: ProjectPaymentAllocation(planID: plan.id, installmentID: plan.installments[0].id))
+            let summary = try #require(ProjectPaymentMetrics.summaries(project: project, records: [record]).first)
+            #expect(!summary.isValid && !summary.installments[0].isValid)
+            #expect(summary.installments[0].paid.optionalDecimal == nil && summary.installments[0].remaining.optionalDecimal == nil)
+            #expect(summary.paid != 300 && summary.remaining != 700)
+            #expect(ProjectFinancialMetrics.unpaidAmount(project: project, records: [record]) == 1000)
+            let schedule = ProjectReceivableScheduleSummary(project: project, records: [record],
+                today: CalendarDay(year: 2099, month: 1, day: 1)!, timeZone: TimeZone(secondsFromGMT: 0)!)
+            #expect(schedule.state == .needsReview && schedule.reviewReasons.contains(.invalidAllocation))
+            #expect(schedule.dueUnpaidAmount == nil)
+        }
+        plan.isArchived = true
+        project.paymentPlans = [plan]
+        var historical = ProjectFinancialRecord(projectId: project.id, direction: .income, category: .paymentRequest, amount: 300,
+            paymentAllocation: ProjectPaymentAllocation(planID: plan.id, installmentID: plan.installments[0].id))
+        #expect(ProjectPaymentMetrics.summaries(project: project, records: [historical]).first?.isValid == false)
+        for status in [ProjectFinancialStatus.draft, .archived] {
+            historical.status = status
+            try ProjectPaymentMetrics.validateAllocation(historical, projects: [project], records: [historical])
+            let summary = try #require(ProjectPaymentMetrics.summaries(project: project, records: [historical]).first)
+            #expect(summary.isValid && summary.paid == .zero && summary.remaining == 1000)
+        }
+        historical.status = .active
+        #expect(throws: (any Error).self) {
+            try ProjectPaymentMetrics.validateAllocation(historical, projects: [project], records: [historical])
+        }
+    }
 }

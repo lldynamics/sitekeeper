@@ -5,7 +5,9 @@ struct WatermarkPhotoAnnotation: Identifiable, Equatable, Sendable {
     enum Kind: String, CaseIterable, Sendable {
         case arrow, circle, text
         var title: String {
-            switch self { case .arrow: AppLocalization.string("箭头"); case .circle: AppLocalization.string("圆圈"); case .text: AppLocalization.string("文字") }
+            switch self { case .arrow: AppLocalization.string("箭头")
+            case .circle: AppLocalization.string("圆圈")
+            case .text: AppLocalization.string("文字") }
         }
     }
     let id: UUID

@@ -165,7 +165,7 @@ struct QuotationEditFormSections: View {
                 }
             }
             Section(AppLocalization.string("备注")) {
-                TextField(AppLocalization.string("备注"), text: $formNotes)
+                TextField(AppLocalization.string("备注"), text: $formNotes, prompt: Text(verbatim: ""))
             }
             if isEditing {
                 AppBusinessFormDestructiveActionSection(title: AppLocalization.string("删除报价")) {

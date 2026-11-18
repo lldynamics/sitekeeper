@@ -37,21 +37,7 @@ extension ExportView {
     }
 
     var enabledExportModuleCount: Int {
-        [
-            includeMaterials,
-            includeQuotes,
-            includeLabor,
-            includeDailyLogs,
-            includeProgress,
-            includeTodos,
-            includeProjectFinance,
-            includeProjectDocuments,
-            includeProjectContacts,
-            includeProjectDrawings,
-            includeWarehouseMovements,
-            includeQuickNotes,
-            includeOperationAuditLogs,
-        ].filter { $0 }.count
+        options.selectedModuleCount
     }
 
     var exportStatusItems: [DataSafetyStatusItem] {
@@ -320,8 +306,16 @@ extension ExportView {
             Toggle(AppLocalization.string("图纸索引"), isOn: $includeProjectDrawings)
             Toggle(AppLocalization.string("仓库流水"), isOn: $includeWarehouseMovements)
             Toggle(AppLocalization.string("随手记"), isOn: $includeQuickNotes)
-            Toggle(AppLocalization.string("操作审计日志"), isOn: $includeOperationAuditLogs)
-            if includeOperationAuditLogs {
+            Toggle(AppLocalization.string("操作审计日志"), isOn: Binding(
+                get: { effectiveIncludeOperationAuditLogs },
+                set: { includeOperationAuditLogs = $0 }
+            ))
+            .disabled(filterProjectId != nil)
+            if filterProjectId != nil {
+                Text(AppLocalization.string("操作审计日志不区分项目，仅支持在“全部项目”范围导出。"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else if effectiveIncludeOperationAuditLogs {
                 Text(AppLocalization.string("审计日志仅随本次数据导出写入文件，不会进入默认备份。"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -360,7 +354,7 @@ extension ExportView {
             LabeledContent(AppLocalization.string("图纸条数"), value: includeProjectDrawings ? "\(snapshot.projectDrawings.count)" : "-")
             LabeledContent(AppLocalization.string("仓库流水条数"), value: includeWarehouseMovements ? "\(snapshot.projectWarehouseMovements.count)" : "-")
             LabeledContent(AppLocalization.string("随手记条数"), value: includeQuickNotes ? "\(snapshot.quickNotes.count)" : "-")
-            LabeledContent(AppLocalization.string("审计日志条数"), value: includeOperationAuditLogs ? "\(filteredOperationAuditEntries.count)" : "-")
+            LabeledContent(AppLocalization.string("审计日志条数"), value: effectiveIncludeOperationAuditLogs ? "\(filteredOperationAuditEntries.count)" : "-")
             LabeledContent(AppLocalization.string("日期格式异常"), value: enableDateFilter ? "\(previewResult.invalidDateCount)" : "-")
             LabeledContent(AppLocalization.string("文件名"), value: previewFilename)
             if enableDateFilter, previewResult.invalidDateCount > 0 {

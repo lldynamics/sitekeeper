@@ -230,7 +230,7 @@ extension BackupExportLeaseTests {
         await store.awaitInitialLoad()
         store.replaceQuickNotes([QuickNote(attachments: [QuickNoteAttachment(kind: .file, fileName: "missing-\(UUID().uuidString).bin")])])
         do {
-            _ = try await CloudBackupCoordinator.shared.backupToCloud(snapshot: store.makeSnapshot(includePhotoFiles: false))
+            _ = try await CloudBackupCoordinator.shared.backupToCloud(snapshot: store.makeSnapshot(includePhotoFiles: false), scope: .complete)
             Issue.record("Incomplete archive must not be uploaded")
         } catch let error as CloudBackupPreparationError {
             #expect(error == .missingFiles(1))

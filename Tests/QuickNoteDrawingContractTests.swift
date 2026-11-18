@@ -5,7 +5,9 @@ struct QuickNoteDrawingContractTests {
     @Test func compactComposerKeepsDrawingReachable() throws {
         let source = try Self.sourceText("Sources/Features/QuickNotes/QuickNoteMediaPicker.swift")
 
-        #expect(source.contains("compactToolIcon(\"pencil.and.outline\")"))
+        #expect(source.contains("compactToolLabel(AppLocalization.string(\"quick_note_media_tool_drawing\"), systemImage: \"pencil.and.outline\")"))
+        #expect(source.contains("compactDrawingButton"))
+        #expect(source.contains("compactMoreMenu(includesAttachmentActions: true)"))
         #expect(source.contains(".accessibilityIdentifier(\"quick-note-add-drawing\")"))
     }
 

@@ -9,6 +9,8 @@ struct BackupRestoreStage {
     let quickNoteStage: URL
     var counts = BackupEmbeddedRestoreCounts()
     var manifestData: Data?
+    var metadataData: Data?
+    private var stagedNames: [String: [String: String]] = [:]
 
     init() throws {
         stageRoot = FileManager.default.temporaryDirectory
@@ -63,10 +65,34 @@ struct BackupRestoreStage {
             manifestData = try readData()
             return
         }
+        if path == BackupArchiveService.metadataPath {
+            metadataData = try readData()
+            return
+        }
         for target in targets {
             guard let name = BackupArchiveService.leafFileName(for: path, prefix: target.prefix) else { continue }
+            let key = AttachmentStoragePath.comparisonKey(name)
+            if let firstName = stagedNames[target.stage]?[key] {
+                // Older backups may contain two spellings of one file. Accept them
+                // only when their independently verified payloads are identical.
+                let temporaryName = ".backup-alias-\(UUID().uuidString)"
+                let temporaryURL = target.directory.appendingPathComponent(temporaryName)
+                defer { try? FileManager.default.removeItem(at: temporaryURL) }
+                try BackupArchiveService.stageEntry(writeEntryToFile, fileName: temporaryName, to: target.directory,
+                                                    failureMessage: target.failureMessage, stage: target.stage)
+                let firstURL = target.directory.appendingPathComponent(firstName)
+                let firstSize = try firstURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+                let secondSize = try temporaryURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+                guard firstSize == secondSize,
+                      try BackupArchiveSecurity.sha256Hex(of: firstURL) == BackupArchiveSecurity.sha256Hex(of: temporaryURL) else {
+                    throw SimpleZipArchiveReader.ZipReadError.duplicateEntry(path)
+                }
+                try FileManager.default.removeItem(at: temporaryURL)
+                return
+            }
             try BackupArchiveService.stageEntry(writeEntryToFile, fileName: name, to: target.directory,
                                                 failureMessage: target.failureMessage, stage: target.stage)
+            stagedNames[target.stage, default: [:]][key] = name
             counts[keyPath: target.count] += 1
             return
         }

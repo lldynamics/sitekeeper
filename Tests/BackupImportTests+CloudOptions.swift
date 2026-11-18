@@ -41,6 +41,62 @@ extension BackupImportTests {
         #expect(filtered.quickNoteAttachmentFiles.isEmpty)
     }
 
+    @Test func cloudBackupRespectsDraftAndInlinePhotoSelectionsInArchiveMetadata() throws {
+        let photo = Data("private draft photo".utf8)
+        var snapshot = snapshotWithAttachmentReferences()
+        snapshot.materialSheetDrafts = [
+            MaterialSheetDraft(title: "材料草稿", items: [
+                MaterialSheetDraftItem(name: "材料", attachmentData: photo, attachmentFileName: "private.jpg")
+            ])
+        ]
+        snapshot.legacyDateProvenance = [
+            LegacyDateProvenance(path: "materialSheetDrafts/record/createdAt", originalText: "2026-01-01",
+                                 interpretation: "legacy-UTC", sourceSchemaVersion: 2)
+        ]
+        var options = CloudBackupContentOptions.all
+        options.includeAttachments = false
+        let withoutAttachments = snapshot.applyingCloudBackupContentOptions(options)
+        let archive = try BackupArchiveService.makeArchive(from: withoutAttachments)
+        defer { try? FileManager.default.removeItem(at: archive.fileURL) }
+
+        var metadata: Data?
+        try SimpleZipArchiveReader.scan(fileURL: archive.fileURL) { entry, readData, _ in
+            if entry.path == BackupArchiveService.metadataPath { metadata = try readData() }
+        }
+        let metadataData = try #require(metadata)
+        let metadataText = try #require(String(data: metadataData, encoding: .utf8))
+        #expect(!metadataText.contains(photo.base64EncodedString()))
+        #expect(!metadataText.contains("private.jpg"))
+        let restored = try BackupArchiveService.decodeBackup(from: archive.fileURL)
+        #expect(restored.materialSheetDrafts.first?.title == "材料草稿")
+        #expect(restored.materialSheetDrafts.first?.items.first?.attachmentData == nil)
+        #expect(restored.materialSheetDrafts.first?.items.first?.attachmentFileName == nil)
+
+        options.includeBusinessRecords = false
+        options.includeAttachments = true
+        let withoutBusiness = snapshot.applyingCloudBackupContentOptions(options)
+        #expect(withoutBusiness.materialSheetDrafts.isEmpty)
+        #expect(withoutBusiness.legacyDateProvenance.isEmpty)
+        #expect(!withoutBusiness.projects.isEmpty)
+
+        let withAttachments = snapshot.applyingCloudBackupContentOptions(.all)
+        #expect(withAttachments.materialSheetDrafts.first?.items.first?.attachmentData == photo)
+        #expect(withAttachments.materialSheetDrafts.first?.items.first?.attachmentFileName == "private.jpg")
+        #expect(snapshot.materialSheetDrafts.first?.items.first?.attachmentData == photo)
+
+        let localArchive = try BackupArchiveService.makeArchive(from: snapshot)
+        defer { try? FileManager.default.removeItem(at: localArchive.fileURL) }
+        let localBackup = try BackupArchiveService.decodeBackup(from: localArchive.fileURL)
+        #expect(localBackup.materialSheetDrafts.first?.items.first?.attachmentData == photo)
+    }
+
+    @Test func cloudBackupRecognizesDraftOnlyAsSelectedContent() {
+        var snapshot = BackupSnapshot(materialItems: [], quoteItems: [], laborRecords: [], projects: [],
+                                      dailyLogs: [], historyRecords: [], templates: [])
+        snapshot.materialSheetDrafts = [MaterialSheetDraft(title: "仅有材料草稿")]
+        #expect(snapshot.applyingCloudBackupContentOptions(.all).hasAnyBackupContent)
+    }
+
     @Test func cloudBackupWithoutAttachmentsWritesNoEmbeddedFilesToArchive() throws {
         let projectID = UUID()
         let photoFileName = try PhotoStorage.saveOrThrow(

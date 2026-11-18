@@ -183,7 +183,8 @@ enum DashboardSummaryBuilder {
     }
 
     private static func accumulate(_ value: MoneyValue?, into total: inout MoneyValue?) {
-        guard let current = total, let value else { total = nil; return }
+        guard let current = total, let value else { total = nil
+        return }
         let next = current + value
         total = next.isValid ? next : nil
     }

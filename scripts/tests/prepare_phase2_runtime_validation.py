@@ -62,6 +62,8 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--xcodegen", type=Path, required=True)
     parser.add_argument("--suffix", required=True)
+    parser.add_argument("--backup-integration-only", action="store_true",
+                        help="Prepare a Debug test host for the isolated backup suite.")
     args = parser.parse_args()
     source, output = args.source.resolve(), args.output.resolve()
     if output.exists() or output == source or output in source.parents:
@@ -79,7 +81,8 @@ def main() -> None:
     output.mkdir(parents=True)
     manifest = {"schema": 1, "source": str(source), "output": str(output), "selection": selection,
                 "copied_files": initial, "transformations": [], "identity": identity,
-                "configuration": "optimized Debug with DEBUG and testability retained",
+                "configuration": ("Debug with isolated backup tests enabled" if args.backup_integration_only
+                                  else "optimized Debug with DEBUG and testability retained"),
                 "scope": "source preparation only; no device or application data access", "success": False}
     try:
         for name in initial:
@@ -92,7 +95,8 @@ def main() -> None:
                 target.chmod(stat.S_IMODE(original.stat().st_mode))
             if helpers.fingerprint(target) != initial[name]:
                 raise RuntimeError("Source changed during copy: " + name)
-        install_thumbnail_fixture(output, manifest)
+        if not args.backup_integration_only:
+            install_thumbnail_fixture(output, manifest)
         for name in IDENTITY_FILES:
             text = (output / name).read_text()
             if PRODUCTION_ID not in text:
@@ -100,17 +104,19 @@ def main() -> None:
             helpers.transform(output, Path(name), text.replace(PRODUCTION_ID, identity).encode(),
                               "Isolate app, extension, group and iCloud identities", manifest)
         spec = (output / "project.yml").read_text()
-        if any(key + ":" in spec for key in ("SWIFT_OPTIMIZATION_LEVEL", "SWIFT_COMPILATION_MODE", "ENABLE_TESTABILITY")):
-            raise RuntimeError("Review existing optimization/testability before overriding")
-        spec, count = re.subn(r"(?m)^settings:\s*$", 'settings:\n  ENABLE_TESTABILITY: YES\n'
-                              '  SWIFT_OPTIMIZATION_LEVEL: "-O"\n  SWIFT_COMPILATION_MODE: wholemodule', spec)
-        if count != 1:
-            raise RuntimeError("Expected one global settings block")
+        if not args.backup_integration_only:
+            if any(key + ":" in spec for key in ("SWIFT_OPTIMIZATION_LEVEL", "SWIFT_COMPILATION_MODE", "ENABLE_TESTABILITY")):
+                raise RuntimeError("Review existing optimization/testability before overriding")
+            spec, count = re.subn(r"(?m)^settings:\s*$", 'settings:\n  ENABLE_TESTABILITY: YES\n'
+                                  '  SWIFT_OPTIMIZATION_LEVEL: "-O"\n  SWIFT_COMPILATION_MODE: wholemodule', spec)
+            if count != 1:
+                raise RuntimeError("Expected one global settings block")
         # All test launches skip cloud/reminder automation through the existing
         # UITestLaunchConfig guard, including the app-hosted native test process.
-        spec, count = re.subn(r"(?m)^(    test:)\s*$", r'\1\n      environmentVariables:\n'
-                              r'        UITEST_VALIDATION_ISOLATED: "1"\n'
-                              r'        SITEKEEPER_PHASE2_UI_FIXTURE: "1"', spec)
+        test_environment = r'\1\n      environmentVariables:\n        UITEST_VALIDATION_ISOLATED: "1"'
+        if not args.backup_integration_only:
+            test_environment += r'\n        SITEKEEPER_PHASE2_UI_FIXTURE: "1"'
+        spec, count = re.subn(r"(?m)^(    test:)\s*$", test_environment, spec)
         if count != 2:
             raise RuntimeError("Expected the two existing test schemes")
         helpers.transform(output, Path("project.yml"), spec.encode(), "Explicit isolated validation build settings", manifest)

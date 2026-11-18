@@ -60,6 +60,11 @@ struct QuickNoteAttachment: Identifiable, Codable, Sendable {
     var displayName: String {
         originalName.isEmpty ? fileName : originalName
     }
+
+    var displayDurationSeconds: Int? {
+        guard let durationSeconds, durationSeconds.isFinite, durationSeconds > 0 else { return nil }
+        return Int(exactly: durationSeconds.rounded(.towardZero))
+    }
 }
 
 struct QuickNote: Identifiable, Codable, Sendable {

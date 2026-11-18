@@ -56,10 +56,6 @@ extension ReportBuilder {
         }
     }
 
-    static func fmt(_ value: Double) -> String {
-        String(format: "%.2f", value)
-    }
-
     static func drawPDFText(
         _ text: String,
         at origin: CGPoint,

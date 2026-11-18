@@ -177,8 +177,15 @@ struct ProjectDocument: Identifiable, Codable, Sendable {
 }
 
 extension ProjectDocument {
+    static let maximumEditableVersionNumber = 999
+
     var normalizedVersionNumber: Int {
         max(1, versionNumber)
+    }
+
+    var nextEditableVersionNumber: Int? {
+        guard normalizedVersionNumber < Self.maximumEditableVersionNumber else { return nil }
+        return normalizedVersionNumber + 1
     }
 
     var versionLabel: String {

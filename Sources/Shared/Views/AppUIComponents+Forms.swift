@@ -182,52 +182,6 @@ extension View {
     }
 }
 
-struct AdaptiveListDetailLayout<Compact: View, Sidebar: View, Detail: View>: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
-    var forceSplit: Bool? = nil
-    var visibility: NavigationSplitViewVisibility = .all
-    @ViewBuilder let compact: () -> Compact
-    @ViewBuilder let sidebar: () -> Sidebar
-    @ViewBuilder let detail: () -> Detail
-
-    init(
-        forceSplit: Bool? = nil,
-        visibility: NavigationSplitViewVisibility = .all,
-        @ViewBuilder compact: @escaping () -> Compact,
-        @ViewBuilder sidebar: @escaping () -> Sidebar,
-        @ViewBuilder detail: @escaping () -> Detail
-    ) {
-        self.forceSplit = forceSplit
-        self.visibility = visibility
-        self.compact = compact
-        self.sidebar = sidebar
-        self.detail = detail
-    }
-
-    private var usesSplitLayout: Bool {
-        if let forceSplit {
-            return forceSplit
-        }
-        return horizontalSizeClass == .regular
-    }
-
-    var body: some View {
-        Group {
-            if usesSplitLayout {
-                NavigationSplitView(columnVisibility: .constant(visibility)) {
-                    sidebar()
-                } detail: {
-                    detail()
-                }
-                .navigationSplitViewStyle(.balanced)
-            } else {
-                compact()
-            }
-        }
-    }
-}
-
 private struct AppListRowFramesKey: PreferenceKey {
     static let defaultValue: [UUID: CGRect] = [:]
     static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
@@ -291,7 +245,8 @@ struct AppPreserveListPosition: ViewModifier {
                     // example, a swipe deletion). Follow its nearest survivor.
                     let id = removed.count == 1 ? removed[0] : visibleID
                     guard let id, !newIDs.contains(id) else { return }
-                    guard let index = oldIDs.firstIndex(of: id) else { visibleID = nil; return }
+                    guard let index = oldIDs.firstIndex(of: id) else { visibleID = nil
+                    return }
                     let candidates = Array(oldIDs.dropFirst(index + 1)) + Array(oldIDs.prefix(index).reversed())
                     visibleID = candidates.first(where: { newIDs.contains($0) })
                     deletionAnchor = removed.count == 1 ? visibleID : nil

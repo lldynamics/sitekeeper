@@ -5,6 +5,7 @@ import UIKit
 struct SitekeeperApp: App {
     @State private var store: DataStore
     @State private var scenePhaseTask: Task<Void, Never>?
+    @State private var backgroundFlushTask: Task<Void, Never>?
     @State private var dayBoundaryRefreshTask: Task<Void, Never>?
     @State private var dueReminderRefreshTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
@@ -82,9 +83,9 @@ struct SitekeeperApp: App {
                 refreshDayAndScheduleBoundaryIfActive()
             }
             scenePhaseTask?.cancel()
-            scenePhaseTask = Task {
-                switch newPhase {
-                case .active:
+            switch newPhase {
+            case .active:
+                scenePhaseTask = Task {
 #if DEBUG
                     guard !UITestLaunchConfig.isUITestSession else { return }
 #endif
@@ -92,13 +93,20 @@ struct SitekeeperApp: App {
                     await DueReminderNotificationScheduler.shared.refreshIfEnabled(
                         snapshot: DueReminderSnapshot(store: store)
                     )
-                case .background, .inactive:
+                }
+            case .background, .inactive:
+                guard backgroundFlushTask == nil else { break }
+                backgroundFlushTask = Task { @MainActor in
+                    defer { backgroundFlushTask = nil }
                     await BackgroundTaskAssertion.application.run(named: "sitekeeper.final-save") {
                         await store.flushSave()
+                        if store.hasUnpersistedMutations {
+                            await store.flushSave()
+                        }
                     }
-                default:
-                    break
                 }
+            default:
+                break
             }
         }
         .onChange(of: store.projectStore.dayContext) { _, _ in

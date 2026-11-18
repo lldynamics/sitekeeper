@@ -28,21 +28,6 @@ enum BackupTaskStateReducer {
     }
 
     static func finalizeCloud(
-        isUploadingCloudBackup: inout Bool,
-        isRefreshingCloudBackups: inout Bool,
-        cloudBackupTask: inout Task<Void, Never>?,
-        cloudStatusMessage: inout String,
-        status: String? = nil
-    ) {
-        isUploadingCloudBackup = false
-        isRefreshingCloudBackups = false
-        cloudBackupTask = nil
-        if let status {
-            cloudStatusMessage = status
-        }
-    }
-
-    static func finalizeCloud(
         state: inout BackupCloudState,
         status: String? = nil
     ) {

@@ -39,6 +39,7 @@ extension BackupView {
                     let snapshot = store.makeCloudBackupSnapshot(options: options)
                     return try await BackupCloudTaskCoordinator.uploadBackup(
                         snapshot: snapshot,
+                        scope: options.archiveScope,
                         progress: { progress in
                             Task { @MainActor in
                                 exportProgress = progress

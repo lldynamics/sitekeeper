@@ -86,6 +86,18 @@ extension LaborRecordView {
             default: "",
             trimWhitespace: false
         )
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("{"),
+           let data = trimmed.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
+            var cleaned = [String: String]()
+            for (key, value) in decoded {
+                let k = key.trimmingCharacters(in: .whitespacesAndNewlines)
+                let v = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !k.isEmpty, !v.isEmpty { cleaned[k] = v }
+            }
+            return cleaned
+        }
         var result = [String: String]()
         for pair in raw.split(separator: ",") {
             let parts = pair.split(separator: ":", maxSplits: 1)
@@ -104,7 +116,14 @@ extension LaborRecordView {
         guard !cleanedType.isEmpty, !cleanedRate.isEmpty else { return }
         var pairs = savedRatePairs()
         pairs[cleanedType] = cleanedRate
-        let raw = pairs.map { "\($0):\($1)" }.joined(separator: ",")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let raw: String
+        if let data = try? encoder.encode(pairs), let text = String(data: data, encoding: .utf8) {
+            raw = text
+        } else {
+            raw = pairs.map { "\($0):\($1)" }.joined(separator: ",")
+        }
         UserPreferencesStore.shared.set(raw, for: rateStorageKey)
     }
 
@@ -113,7 +132,7 @@ extension LaborRecordView {
         guard !cleaned.isEmpty, !savedTeams.contains(cleaned) else { return }
         var teams = savedTeams
         teams.append(cleaned)
-        savedTeamsRaw = teams.joined(separator: ",")
+        savedTeamsRaw = Self.encodeSavedList(teams)
     }
 
     private func saveWorkType(_ type: String) {
@@ -121,7 +140,7 @@ extension LaborRecordView {
         guard !cleaned.isEmpty, !savedWorkTypes.contains(cleaned) else { return }
         var types = savedWorkTypes
         types.append(cleaned)
-        savedWorkTypesRaw = types.joined(separator: ",")
+        savedWorkTypesRaw = Self.encodeSavedList(types)
     }
 
     func laborRow(_ r: LaborRecord) -> some View {

@@ -5,6 +5,23 @@ import UIKit
 
 @MainActor
 struct ProjectDocumentDeliveryInspectionTests {
+    @Test func inspectionCSVProtectsProjectAndDocumentFormulaText() {
+        let project = Project(name: " \t=1+1", location: "")
+        let document = ProjectDocument(
+            projectId: project.id, title: "@SUM(A1:A2)", category: .contract,
+            fileName: "", submissionStatus: .returned, responsiblePerson: "+SUM(1,2)"
+        )
+        let inspection = ProjectDocumentDeliveryInspection(
+            project: project, documents: [document], drawings: [], logs: [], quickNotes: []
+        )
+        let payload = ProjectDocumentDeliveryInspectionExport.makePayload(for: [inspection], format: .csv)
+        let csv = String(decoding: payload.data, as: UTF8.self)
+        #expect(Array(payload.data.prefix(3)) == [0xEF, 0xBB, 0xBF])
+        #expect(csv.contains("\"' \t=1+1\""))
+        #expect(csv.contains("\"'@SUM(A1:A2)\""))
+        #expect(!csv.contains("\" \t=1+1\""))
+    }
+
     @Test func projectDeliveryInspectionReportsChecklistAndLedgerIssues() {
         let projectId = UUID()
         let project = Project(
@@ -72,6 +89,32 @@ struct ProjectDocumentDeliveryInspectionTests {
         #expect(todoTitles.contains("归档项目资料：材料报验"))
         #expect(todoTitles.contains("补录资料责任人：施工方案"))
         #expect(todoTitles.contains("补录资料形成日期：施工方案"))
+    }
+
+    @Test func completedTodoRectificationOriginalsBlockDeliveryWhenMissing() {
+        let project = Project(name: "Rectification missing", location: "")
+        let todo = SiteTodo(
+            title: "Closed repair",
+            rectificationBeforePhotoFileName: "missing-before-\(UUID().uuidString).jpg",
+            rectificationAfterPhotoFileName: "missing-after-\(UUID().uuidString).jpg", isDone: true
+        )
+        let inspection = ProjectDocumentDeliveryInspection(
+            project: project, documents: [], drawings: [], logs: [], quickNotes: [], todos: [todo]
+        )
+        #expect(inspection.missingFiles == ["照片 Closed repair 整改前", "照片 Closed repair 整改后"])
+        #expect(inspection.issues.contains { $0.kind == .missingFiles && $0.count == 2 })
+        let health = ReportBuilder.projectDeliveryHealthReport(
+            financialRecords: [], documents: [], drawings: [], todos: [todo], logs: [], quickNotes: []
+        )
+        #expect(health.missingOriginalEntries == inspection.missingFiles)
+        let decision = ProjectDetailExportWorkflow.packageRequestDecision(
+            documents: [], drawings: [], logs: [], quickNotes: [], todos: [todo]
+        )
+        guard case .reject(let message) = decision else {
+            Issue.record("Missing rectification originals must reject export")
+            return
+        }
+        #expect(message.contains("Closed repair"))
     }
 
     @Test func projectDeliveryHealthSummarizesDeliverabilityBlockers() throws {

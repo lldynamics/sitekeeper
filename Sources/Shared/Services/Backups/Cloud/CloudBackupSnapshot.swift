@@ -33,6 +33,7 @@ extension BackupSnapshot {
             quoteItems = []
             laborRecords = []
             historyRecords = []
+            materialSheetDrafts = []
         }
 
         if !options.includeProjectRecords {
@@ -64,7 +65,7 @@ extension BackupSnapshot {
     private mutating func removeExcludedDateProvenance(_ options: CloudBackupContentOptions) {
         var excludedDateCollections = Set<String>()
         if !options.includeBusinessRecords {
-            excludedDateCollections.formUnion(["materialItems", "quoteItems", "laborRecords", "historyRecords"])
+            excludedDateCollections.formUnion(["materialItems", "quoteItems", "laborRecords", "historyRecords", "materialSheetDrafts"])
         }
         if !options.includeProjectRecords {
             excludedDateCollections.formUnion(["projects", "dailyLogs", "progressTasks", "siteTodos",
@@ -82,6 +83,16 @@ extension BackupSnapshot {
     }
 
     private mutating func removeAttachmentReferences() {
+        materialSheetDrafts = materialSheetDrafts.map { draft in
+            var value = draft
+            value.items = value.items.map { item in
+                var redacted = item
+                redacted.attachmentData = nil
+                redacted.attachmentFileName = nil
+                return redacted
+            }
+            return value
+        }
         dailyLogs = dailyLogs.map { log in
             var value = log
             value.photoFileName = nil
@@ -268,6 +279,7 @@ extension BackupSnapshot {
         !projectWarehouseMovements.isEmpty ||
         !templates.isEmpty ||
         !materialPriceEntries.isEmpty ||
+        !materialSheetDrafts.isEmpty ||
         !supplierProfiles.isEmpty ||
         !constructionMethods.isEmpty ||
         !favoriteMaterialKeys.isEmpty ||

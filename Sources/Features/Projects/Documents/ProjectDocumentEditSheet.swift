@@ -73,8 +73,15 @@ struct ProjectDocumentEditSheet: View {
                 }
 
                 Section(AppLocalization.string("版本管理")) {
-                    Stepper(value: $versionNumber, in: 1...999) {
+                    if versionNumber > ProjectDocument.maximumEditableVersionNumber {
                         LabeledContent(AppLocalization.string("版本号"), value: "V\(versionNumber)")
+                        Text(AppLocalization.string("原版本号超出可编辑范围，保存时将保留原值。"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Stepper(value: $versionNumber, in: 1...ProjectDocument.maximumEditableVersionNumber) {
+                            LabeledContent(AppLocalization.string("版本号"), value: "V\(versionNumber)")
+                        }
                     }
                     Picker(AppLocalization.string("版本状态"), selection: $versionState) {
                         ForEach(ProjectDocumentVersionState.allCases, id: \.self) { item in
@@ -88,7 +95,9 @@ struct ProjectDocumentEditSheet: View {
                         }
                     }
                     if let previousVersion = selectedPreviousVersion {
-                        Text(String(format: AppLocalization.string("保存后会把 %@ 标记为已替换。"), versionReferenceLabel(previousVersion)))
+                        Text(previousVersionCannotBeReplaced
+                             ? AppLocalization.string("上一版版本号已达到上限，请选择其他版本或取消替换。")
+                             : String(format: AppLocalization.string("保存后会把 %@ 标记为已替换。"), versionReferenceLabel(previousVersion)))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -156,7 +165,8 @@ struct ProjectDocumentEditSheet: View {
                         dismiss()
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                              (!amount.isEmpty && !InputValidator.nonNegativeNumber(amount)))
+                              (!amount.isEmpty && !InputValidator.nonNegativeNumber(amount)) ||
+                              previousVersionCannotBeReplaced)
                 }
             }
             .appKeyboardToolbar {
@@ -219,6 +229,13 @@ struct ProjectDocumentEditSheet: View {
         return versionCandidates.first { $0.id == replacesDocumentId }
     }
 
+    private var previousVersionCannotBeReplaced: Bool {
+        guard let previous = selectedPreviousVersion, previous.nextEditableVersionNumber == nil else { return false }
+        return document.replacesDocumentId != previous.id ||
+            document.normalizedVersionNumber <= previous.normalizedVersionNumber ||
+            versionNumber != document.normalizedVersionNumber
+    }
+
     private func versionReferenceLabel(_ document: ProjectDocument) -> String {
         let title = document.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let displayTitle = title.isEmpty ? document.fileName : title
@@ -226,8 +243,7 @@ struct ProjectDocumentEditSheet: View {
     }
 
     private func syncVersionNumberWithSelectedPrevious() {
-        guard let selectedPreviousVersion else { return }
-        let suggestedNumber = min(999, selectedPreviousVersion.normalizedVersionNumber + 1)
+        guard let suggestedNumber = selectedPreviousVersion?.nextEditableVersionNumber else { return }
         if versionNumber < suggestedNumber {
             versionNumber = suggestedNumber
         }

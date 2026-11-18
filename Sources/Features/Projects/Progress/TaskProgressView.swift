@@ -317,7 +317,7 @@ struct TaskProgressView: View {
                     LabeledContent(AppLocalization.string("当前"), value: "\(Int(newCompletion * 100))%")
                 }
                 Section(AppLocalization.string("备注")) {
-                    TextField(AppLocalization.string("备注"), text: $newNote, axis: .vertical)
+                    TextField(AppLocalization.string("备注"), text: $newNote, prompt: Text(verbatim: ""), axis: .vertical)
                         .lineLimit(2...4)
                 }
             }

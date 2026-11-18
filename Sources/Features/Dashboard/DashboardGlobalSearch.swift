@@ -72,6 +72,7 @@ struct DashboardGlobalSearch: View {
                         }
                     }
                 }
+                .accessibilityIdentifier("dashboard-search-project-option-\(project.id.uuidString)")
             }
         } label: {
             HStack(spacing: 4) {
@@ -121,6 +122,7 @@ struct DashboardGlobalSearch: View {
                         }
                     }
                 }
+                .accessibilityIdentifier("dashboard-search-category-option-\(cat.rawValue)")
             }
         } label: {
             HStack(spacing: 4) {
@@ -153,14 +155,18 @@ struct DashboardGlobalSearch: View {
                 Button(AppLocalization.string("全部项目")) { projectID = nil }
                 ForEach(projects) { project in
                     Button(project.name) { projectID = project.id }
+                        .accessibilityIdentifier("dashboard-search-project-option-\(project.id.uuidString)")
                 }
             }
+            .accessibilityIdentifier("dashboard-search-project-submenu")
             Menu(String(format: AppLocalization.string("类型: %@"), currentCategoryName)) {
                 Button(AppLocalization.string("全部类型")) { category = nil }
                 ForEach(RealtimeSearchSuggestion.Category.allCases, id: \.self) { cat in
                     Button(cat.displayName) { category = cat }
+                        .accessibilityIdentifier("dashboard-search-category-option-\(cat.rawValue)")
                 }
             }
+            .accessibilityIdentifier("dashboard-search-category-submenu")
             if projectID != nil || category != nil {
                 Divider()
                 Button(role: .destructive) {

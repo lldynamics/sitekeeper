@@ -9,6 +9,8 @@ struct CloudBackupContentOptions: Equatable {
 
     static let all = CloudBackupContentOptions()
 
+    var archiveScope: CloudBackupScope { normalized() == .all ? .complete : .partial }
+
     var hasSelectedContent: Bool {
         includeBusinessRecords || includeProjectRecords || includeProjectFilesAndNotes || includeKnowledgeBase
     }

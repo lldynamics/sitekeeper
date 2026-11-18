@@ -11,6 +11,45 @@ struct PhotoBatchTransactionTests {
         case rollback
     }
 
+    @Test func unsafeLaterNameFailsBeforeAnyOriginalOrThumbnailChanges() throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let safe = "历史 照片.jpg"
+        try PhotoStorage.saveBatchOrThrow(originals: [makeJPEG(.red)], fileNames: [safe], directory: root)
+        let before = try snapshot(root)
+        for unsafe in ["../outside.jpg", "nested/file.jpg", "nested\\file.jpg", ".", "..", "bad\0name"] {
+            #expect(throws: FileStorageError.self) {
+                try PhotoStorage.saveBatchOrThrow(originals: [makeJPEG(.blue), makeJPEG(.green)], fileNames: [safe, unsafe], directory: root)
+            }
+            #expect(try snapshot(root) == before)
+            #expect(try transactionDirectories(root).isEmpty)
+        }
+    }
+
+    @Test func batchRejectsSymlinkDirectoryAndSymlinkedFamilyWithoutTouchingOutside() throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let outside = root.appendingPathComponent("outside", isDirectory: true)
+        let photos = root.appendingPathComponent("Photos", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: photos, withIntermediateDirectories: true)
+        let marker = outside.appendingPathComponent("marker.jpg")
+        let bytes = Data("protected bytes".utf8)
+        try bytes.write(to: marker)
+        let leaf = photos.appendingPathComponent("unsafe.jpg")
+        try FileManager.default.createSymbolicLink(at: leaf, withDestinationURL: marker)
+        #expect(throws: FileStorageError.self) { try PhotoStorage.saveBatchOrThrow(originals: [makeJPEG(.red)], fileNames: ["unsafe.jpg"], directory: root) }
+        #expect(try Data(contentsOf: marker) == bytes)
+        try FileManager.default.removeItem(at: leaf)
+        try FileManager.default.createDirectory(at: leaf, withIntermediateDirectories: false)
+        #expect(throws: FileStorageError.self) { try PhotoStorage.saveBatchOrThrow(originals: [makeJPEG(.red)], fileNames: ["unsafe.jpg"], directory: root) }
+        try FileManager.default.removeItem(at: photos)
+        try FileManager.default.createSymbolicLink(at: photos, withDestinationURL: outside)
+        #expect(throws: FileStorageError.self) { try PhotoStorage.saveBatchOrThrow(originals: [makeJPEG(.red)], fileNames: ["marker.jpg"], directory: root) }
+        #expect(try Data(contentsOf: marker) == bytes)
+        #expect(try transactionDirectories(root).isEmpty)
+    }
+
     @Test func batchWritesEveryOriginalAndDecodableThumbnailWithStableNames() throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }

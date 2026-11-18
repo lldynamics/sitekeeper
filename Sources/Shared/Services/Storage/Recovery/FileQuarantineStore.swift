@@ -40,13 +40,6 @@ enum FileQuarantineStore {
         RecoverableDeletionStorage.rootURL(named: rootDirectoryName)
     }
 
-    private static var manifestURL: URL? {
-        RecoverableDeletionStorage.manifestURL(
-            rootDirectoryName: rootDirectoryName,
-            manifestFileName: manifestFileName
-        )
-    }
-
     static func withRootURLForTesting<T>(_ rootURL: URL, perform body: () throws -> T) rethrows -> T {
         testingRootScopeLock.lock()
         defer { testingRootScopeLock.unlock() }
@@ -55,12 +48,6 @@ enum FileQuarantineStore {
             rootDirectoryName: rootDirectoryName,
             perform: body
         )
-    }
-
-    static func rootURLForTesting() throws -> URL {
-        transactionLock.lock()
-        defer { transactionLock.unlock() }
-        return try RecoverableDeletionStorage.createRootDirectory(named: rootDirectoryName)
     }
 
     @discardableResult
@@ -73,6 +60,8 @@ enum FileQuarantineStore {
         transactionLock.lock()
         defer { transactionLock.unlock() }
         let manager = FileManager.default
+        _ = try validatedOriginalURL(path: sourceURL.path,
+            fileName: originalFileName ?? sourceURL.lastPathComponent, category: category)
         guard manager.fileExists(atPath: sourceURL.path) else { return false }
         if exportProtection.leases.values.contains(where: { $0.contains(sourceURL.standardizedFileURL.path) }) {
             exportProtection.requests[sourceURL.standardizedFileURL.path] = DeferredQuarantine(
@@ -85,12 +74,11 @@ enum FileQuarantineStore {
             throw FileStorageError.deleteFailed(originalFileName ?? sourceURL.lastPathComponent)
         }
 
+        try AttachmentStoragePath.validateDirectory(rootURL)
         try manager.createDirectory(at: rootURL, withIntermediateDirectories: true)
         _ = purgeExpiredEntries(now: Date())
 
-        let safeOriginalFileName = (originalFileName ?? sourceURL.lastPathComponent)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedOriginalFileName = safeOriginalFileName.isEmpty ? sourceURL.lastPathComponent : safeOriginalFileName
+        let resolvedOriginalFileName = originalFileName ?? sourceURL.lastPathComponent
 
         let now = Date()
         let effectiveRetentionDays = normalizedRetentionDays(retentionDays ?? configuredRetentionDays())
@@ -99,7 +87,7 @@ enum FileQuarantineStore {
 
         let categoryDirectory = rootURL.appendingPathComponent(category.rawValue, isDirectory: true)
         let trashedFileName = "\(UUID().uuidString)-\(resolvedOriginalFileName)"
-        let destinationURL = categoryDirectory.appendingPathComponent(trashedFileName)
+        let destinationURL = try AttachmentStoragePath.fileURL(for: trashedFileName, in: categoryDirectory)
         let relativePath = category.rawValue + "/" + trashedFileName
 
         try manager.createDirectory(at: categoryDirectory, withIntermediateDirectories: true)
@@ -172,7 +160,8 @@ enum FileQuarantineStore {
         }
 
         let manager = FileManager.default
-        let originalURL = URL(fileURLWithPath: entry.originalPath)
+        let originalURL = try validatedOriginalURL(path: entry.originalPath,
+            fileName: entry.originalFileName, category: entry.category)
         guard manager.fileExists(atPath: quarantinedURL.path) else {
             if manager.fileExists(atPath: originalURL.path) {
                 try removeEntry(entry.id)
@@ -219,19 +208,21 @@ enum FileQuarantineStore {
     static func permanentlyDelete(_ entry: FileQuarantineEntry) throws {
         transactionLock.lock()
         defer { transactionLock.unlock() }
-        if let quarantinedURL = quarantinedURL(for: entry) {
-            do {
-                _ = try FileOps.removeIfExists(
-                    at: quarantinedURL,
-                    context: .init(
-                        event: "quarantine.permanent_delete",
-                        category: .fileStorage,
-                        source: "FileQuarantineStore.permanentlyDelete"
-                    )
+        _ = try validatedOriginalURL(path: entry.originalPath, fileName: entry.originalFileName, category: entry.category)
+        guard let quarantinedURL = quarantinedURL(for: entry) else {
+            throw FileStorageError.unsafeAttachmentPath(entry.originalFileName)
+        }
+        do {
+            _ = try FileOps.removeIfExists(
+                at: quarantinedURL,
+                context: .init(
+                    event: "quarantine.permanent_delete",
+                    category: .fileStorage,
+                    source: "FileQuarantineStore.permanentlyDelete"
                 )
-            } catch {
-                throw FileStorageError.deleteFailed(entry.originalFileName)
-            }
+            )
+        } catch {
+            throw FileStorageError.deleteFailed(entry.originalFileName)
         }
         try removeEntry(entry.id)
     }
@@ -249,8 +240,79 @@ enum FileQuarantineStore {
         } ?? defaultRetentionDays
     }
 
+    /// A legacy manifest cannot redirect recovery outside the owning storage family.
+    /// Unrecognized historic paths remain on disk and in the manifest for manual recovery.
+    private static func validatedOriginalURL(path: String, fileName: String, category: FileQuarantineCategory) throws -> URL {
+        try AttachmentStoragePath.validateLeaf(fileName)
+        guard path.hasPrefix("/"), !path.contains("\0"),
+              !path.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }) else {
+            throw FileStorageError.unsafeAttachmentPath(fileName)
+        }
+        let original = URL(fileURLWithPath: path)
+        let originalLeaf = original.lastPathComponent
+        try AttachmentStoragePath.validateLeaf(originalLeaf)
+        // Older manifests trimmed the display name but retained the original path verbatim.
+        guard originalLeaf == fileName || originalLeaf.trimmingCharacters(in: .whitespacesAndNewlines) == fileName else {
+            throw FileStorageError.unsafeAttachmentPath(fileName)
+        }
+        let expected: URL
+        switch category {
+        case .photoOriginal: expected = try PhotoStorage.validatedFileURL(for: originalLeaf)
+        case .photoThumbnail: expected = try PhotoStorage.validatedThumbnailFileURL(for: originalLeaf)
+        case .drawing, .drawingSidecar: expected = try DrawingStorage.validatedFileURL(for: originalLeaf)
+        case .projectDocument: expected = try ProjectDocumentStorage.validatedFileURL(for: originalLeaf)
+        case .quickNoteAttachment: expected = try QuickNoteAttachmentStorage.validatedFileURL(for: originalLeaf)
+        }
+        if let relocated = relocatedContainerTarget(originalPath: path, expected: expected) {
+            return relocated
+        }
+        try AttachmentStoragePath.validateFile(original)
+        if original.resolvingSymlinksInPath().standardizedFileURL == expected.resolvingSymlinksInPath().standardizedFileURL {
+            return original
+        }
+        // Only the explicit test-root API enables synthetic fixture origins. The bound is
+        // the fixture directory beside that root, never the system temporary directory.
+        if let override = RecoverableDeletionStorage.rootOverrideForTesting(named: rootDirectoryName) {
+            let bound = override.deletingLastPathComponent().resolvingSymlinksInPath().standardizedFileURL
+            let candidate = original.resolvingSymlinksInPath().standardizedFileURL
+            let temporary = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().standardizedFileURL
+            if bound != temporary, bound.path != "/", candidate.path.hasPrefix(bound.path + "/") {
+                return original
+            }
+        }
+        throw FileStorageError.unsafeAttachmentPath(fileName)
+    }
+
+    /// iOS rotates `/Containers/Data/Application/<UUID>` across app updates and device restores.
+    /// Map a historic container path onto the current validated family URL only when its
+    /// `Documents/<family>/<leaf>` suffix matches `expected` verbatim.
+    private static func relocatedContainerTarget(originalPath: String, expected: URL) -> URL? {
+        let parts = originalPath.split(separator: "/").map(String.init)
+        guard parts.count >= 7 else { return nil }
+        for index in 0...(parts.count - 7) {
+            guard parts[index] == "Containers",
+                  parts[index + 1] == "Data",
+                  parts[index + 2] == "Application",
+                  UUID(uuidString: parts[index + 3]) != nil,
+                  parts[index + 4] == "Documents" else {
+                continue
+            }
+            let suffix = "/" + parts[(index + 4)...].joined(separator: "/")
+            let expectedStandardized = expected.standardizedFileURL.path
+            let expectedResolved = expected.resolvingSymlinksInPath().standardizedFileURL.path
+            if expectedStandardized.hasSuffix(suffix) || expectedResolved.hasSuffix(suffix) {
+                return expected
+            }
+        }
+        return nil
+    }
+
     private static func quarantinedURL(for entry: FileQuarantineEntry) -> URL? {
-        rootURL?.appendingPathComponent(entry.quarantinedRelativePath)
+        guard let rootURL else { return nil }
+        let prefix = entry.category.rawValue + "/"
+        guard entry.quarantinedRelativePath.hasPrefix(prefix) else { return nil }
+        let name = String(entry.quarantinedRelativePath.dropFirst(prefix.count))
+        return try? AttachmentStoragePath.fileURL(for: name, in: rootURL.appendingPathComponent(entry.category.rawValue))
     }
 
     private static func removeEntry(_ id: UUID) throws {
@@ -262,9 +324,12 @@ enum FileQuarantineStore {
     private static func invalidateCache(for entry: FileQuarantineEntry) {
         switch entry.category {
         case .photoOriginal, .photoThumbnail:
-            PhotoCache.shared.invalidate(fileName: entry.originalFileName)
+            PhotoCache.shared.invalidate(fileName: URL(fileURLWithPath: entry.originalPath).lastPathComponent)
         case .quickNoteAttachment:
-            StorageThumbnailCache.invalidate(resourceURL: URL(fileURLWithPath: entry.originalPath))
+            let leaf = URL(fileURLWithPath: entry.originalPath).lastPathComponent
+            let target = (try? QuickNoteAttachmentStorage.validatedFileURL(for: leaf))
+                ?? URL(fileURLWithPath: entry.originalPath)
+            StorageThumbnailCache.invalidate(resourceURL: target)
         case .drawing, .drawingSidecar, .projectDocument:
             break
         }
@@ -319,7 +384,7 @@ extension FileQuarantineStore {
             manifest.entries,
             now: now,
             expiresAt: \.expiresAt,
-            removeAfterFailure: true
+            removeAfterFailure: false
         ) { entry in
             try deleteExpiredEntry(entry, rootURL: rootURL)
         } onDeleteFailure: { entry, error in
@@ -342,7 +407,10 @@ extension FileQuarantineStore {
     }
 
     private static func deleteExpiredEntry(_ entry: FileQuarantineEntry, rootURL: URL) throws {
-        let quarantinedURL = rootURL.appendingPathComponent(entry.quarantinedRelativePath)
+        _ = try validatedOriginalURL(path: entry.originalPath, fileName: entry.originalFileName, category: entry.category)
+        guard let quarantinedURL = quarantinedURL(for: entry) else {
+            throw FileStorageError.unsafeAttachmentPath(entry.originalFileName)
+        }
         guard FileManager.default.fileExists(atPath: quarantinedURL.path) else { return }
         _ = try FileOps.removeIfExists(
             at: quarantinedURL,

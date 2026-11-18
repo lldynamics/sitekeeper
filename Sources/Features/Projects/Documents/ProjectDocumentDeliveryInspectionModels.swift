@@ -107,7 +107,8 @@ struct ProjectDocumentDeliveryInspection: Identifiable {
             documents: projectStore.projectDocuments(for: project.id),
             drawings: projectStore.projectDrawings(for: project.id),
             logs: projectStore.dailyLogs(for: project.id),
-            quickNotes: projectStore.quickNotes(for: project.id)
+            quickNotes: projectStore.quickNotes(for: project.id),
+            todos: projectStore.siteTodos(for: project.id)
         )
     }
 
@@ -121,7 +122,8 @@ struct ProjectDocumentDeliveryInspection: Identifiable {
         documents: [ProjectDocument],
         drawings: [ProjectDrawing],
         logs: [DailyLog],
-        quickNotes: [QuickNote]
+        quickNotes: [QuickNote],
+        todos: [SiteTodo] = []
     ) {
         let projectDocuments = documents.sorted { $0.createdAt > $1.createdAt }
         let checklist = DocumentArchiveChecklistSnapshot(
@@ -135,7 +137,8 @@ struct ProjectDocumentDeliveryInspection: Identifiable {
             documents: projectDocuments,
             drawings: drawings,
             logs: logs,
-            quickNotes: quickNotes
+            quickNotes: quickNotes,
+            todos: todos
         )
         returnedDocuments = projectDocuments.filter { $0.submissionStatus == .returned }
         unarchivedDocuments = projectDocuments.filter { $0.submissionStatus != .archived }
@@ -533,8 +536,10 @@ enum ProjectDocumentDeliveryInspectionExport {
 
     private static func csvLine(_ fields: [String]) -> String {
         fields.map { field in
-            let escaped = field
+            let escaped = ReportBuilder.spreadsheetText(field)
                 .replacingOccurrences(of: "\"", with: "\"\"")
+                .replacingOccurrences(of: "\r\n", with: " ")
+                .replacingOccurrences(of: "\r", with: " ")
                 .replacingOccurrences(of: "\n", with: " ")
             return "\"\(escaped)\""
         }

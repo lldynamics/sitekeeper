@@ -17,6 +17,7 @@ actor DataStorePersistenceActor {
 
     struct LoadDecodeError: Error {
         let rawData: Data
+        let underlyingError: any Error
     }
 
     init(
@@ -59,7 +60,7 @@ actor DataStorePersistenceActor {
         do {
             snapshot = try JSONDecoder().decode(BackupSnapshot.self, from: data)
         } catch {
-            throw LoadDecodeError(rawData: data)
+            throw LoadDecodeError(rawData: data, underlyingError: error)
         }
         lastPersistedData = data
         // Loading never writes. The next save stores the reconciled audit and drops the

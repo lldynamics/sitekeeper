@@ -15,45 +15,36 @@ struct BackupEmbeddedFileRestorePolicy: Sendable {
         overwritesExistingFiles: true
     )
 
-    static func referencedBy(
-        _ snapshot: BackupSnapshot,
-        overwritesExistingFiles: Bool
-    ) -> Self {
-        Self(
-            photoFileDestinations: identityDestinations(
-                BackupArchiveService.photoFileNames(from: snapshot)
-            ),
-            drawingFileDestinations: identityDestinations(
-                snapshot.projectDrawings.map(\.fileName)
-            ),
-            documentFileDestinations: identityDestinations(
-                snapshot.projectDocuments.map(\.fileName)
-            ),
-            quickNoteAttachmentFileDestinations: identityDestinations(
-                BackupArchiveService.quickNoteAttachmentNames(from: snapshot)
-            ),
-            overwritesExistingFiles: overwritesExistingFiles
-        )
-    }
-
     static func mapped(
         photoFileDestinations: [String: String],
         drawingFileDestinations: [String: String],
         documentFileDestinations: [String: String],
-        quickNoteAttachmentFileDestinations: [String: String]
+        quickNoteAttachmentFileDestinations: [String: String],
+        overwritesExistingFiles: Bool = false
     ) -> Self {
         Self(
             photoFileDestinations: photoFileDestinations,
             drawingFileDestinations: drawingFileDestinations,
             documentFileDestinations: documentFileDestinations,
             quickNoteAttachmentFileDestinations: quickNoteAttachmentFileDestinations,
-            overwritesExistingFiles: false
+            overwritesExistingFiles: overwritesExistingFiles
         )
     }
 
-    private static func identityDestinations(_ fileNames: [String]) -> [String: String] {
-        Dictionary(
-            uniqueKeysWithValues: Set(fileNames.filter { !$0.isEmpty }).map { ($0, $0) }
+    func plannedFiles(from archiveFiles: BackupFileImpactSummary) -> BackupFileImpactSummary {
+        func matching(_ names: [String], destinations: [String: String]?) -> [String] {
+            let allowedKeys = destinations.map { Set($0.keys.map(AttachmentStoragePath.comparisonKey)) }
+            var seen = Set<String>()
+            return names.filter { name in
+                let key = AttachmentStoragePath.comparisonKey(name)
+                return (allowedKeys?.contains(key) ?? true) && seen.insert(key).inserted
+            }
+        }
+        return BackupFileImpactSummary(
+            photoFileNames: matching(archiveFiles.photoFileNames, destinations: photoFileDestinations),
+            drawingFileNames: matching(archiveFiles.drawingFileNames, destinations: drawingFileDestinations),
+            documentFileNames: matching(archiveFiles.documentFileNames, destinations: documentFileDestinations),
+            quickNoteAttachmentFileNames: matching(archiveFiles.quickNoteAttachmentFileNames, destinations: quickNoteAttachmentFileDestinations)
         )
     }
 }

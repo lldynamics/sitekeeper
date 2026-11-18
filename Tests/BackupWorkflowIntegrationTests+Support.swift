@@ -75,7 +75,7 @@ final class BackupWorkflowIntegrationFixture {
         store.replaceMaterialSheetDrafts([MaterialSheetDraft(title: "Local workflow draft", projectId: localProject.id)])
     }
 
-    private func incomingSnapshot() -> BackupSnapshot {
+    private func incomingSnapshot(attachmentNames: [String]? = nil) -> BackupSnapshot {
         BackupSnapshot(
             materialItems: [], quoteItems: [], laborRecords: [], projects: [incomingProject],
             dailyLogs: [], historyRecords: [],
@@ -83,7 +83,7 @@ final class BackupWorkflowIntegrationFixture {
                 id: incomingNoteID,
                 title: "Incoming workflow note",
                 projectId: incomingProject.id,
-                attachments: [QuickNoteAttachment(kind: .file, fileName: sharedFileName)]
+                attachments: (attachmentNames ?? [sharedFileName]).map { QuickNoteAttachment(kind: .file, fileName: $0) }
             )],
             templates: [],
             materialSheetDrafts: [MaterialSheetDraft(title: "Incoming workflow draft", projectId: incomingProject.id)]
@@ -92,8 +92,8 @@ final class BackupWorkflowIntegrationFixture {
 
     /// The ZIP is synthesized directly, so preparing incoming bytes never replaces
     /// an existing attachment before the import transaction takes ownership.
-    func makeArchive(corruptMetadata: Bool = false) throws -> URL {
-        let snapshot = incomingSnapshot()
+    func makeArchive(corruptMetadata: Bool = false, attachmentNames: [String]? = nil, archiveFileNames: [String]? = nil) throws -> URL {
+        let snapshot = incomingSnapshot(attachmentNames: attachmentNames)
         let manifest = BackupArchiveManifest(schemaVersion: snapshot.schemaVersion, metadataPath: BackupArchiveService.metadataPath)
         let metadata: Data
         if corruptMetadata {
@@ -104,7 +104,9 @@ final class BackupWorkflowIntegrationFixture {
         var zip = SimpleZipArchiveBuilder()
         zip.addFile(path: BackupArchiveService.manifestPath, data: try JSONEncoder().encode(manifest))
         zip.addFile(path: BackupArchiveService.metadataPath, data: metadata)
-        zip.addFile(path: BackupArchiveService.quickNotePrefix + sharedFileName, data: incomingData)
+        for name in archiveFileNames ?? [sharedFileName] {
+            zip.addFile(path: BackupArchiveService.quickNotePrefix + name, data: incomingData)
+        }
         let url = root.appendingPathComponent("workflow-\(UUID().uuidString).zip")
         try zip.build().write(to: url, options: .atomic)
         return url

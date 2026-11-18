@@ -49,7 +49,23 @@ enum ProjectTimelineBuilder {
     ) -> [ProjectTimelineItem] {
         var items: [ProjectTimelineItem] = []
 
-        items += logs.map {
+        items += workTimelineItems(logs: logs, progress: progress, siteTodos: siteTodos)
+        items += financeTimelineItems(materials: materials, quotes: quotes, labor: labor)
+        items += assetsTimelineItems(drawings: drawings, documents: documents)
+        items += notesTimelineItems(quickNotes)
+        items += ledgerTimelineItems(financialRecords: financialRecords, warehouseMovements: warehouseMovements)
+
+        return items.sorted { lhs, rhs in
+            let lhsDate = timelineDate(lhs.date)
+            let rhsDate = timelineDate(rhs.date)
+            if lhsDate != rhsDate { return lhsDate > rhsDate }
+            if lhs.date != rhs.date { return lhs.date > rhs.date }
+            return lhs.id > rhs.id
+        }
+    }
+
+    private static func workTimelineItems(logs: [DailyLog], progress: [ProgressTask], siteTodos: [SiteTodo]) -> [ProjectTimelineItem] {
+        var items = logs.map {
             let methodSummary = linkedMethodSummary(count: $0.linkedConstructionMethodIDs.count)
             return ProjectTimelineItem(
                 id: "log-\($0.id.uuidString)",
@@ -100,7 +116,11 @@ enum ProjectTimelineBuilder {
             )
         }
 
-        items += materials.map {
+        return items
+    }
+
+    private static func financeTimelineItems(materials: [MaterialItem], quotes: [QuoteItem], labor: [LaborRecord]) -> [ProjectTimelineItem] {
+        var items = materials.map {
             ProjectTimelineItem(
                 id: "material-\($0.id.uuidString)",
                 date: $0.arrivalDate,
@@ -110,19 +130,6 @@ enum ProjectTimelineBuilder {
                 systemImage: "shippingbox.fill",
                 tint: .appPrimaryAction,
                 targetMode: .finance
-            )
-        }
-
-        items += drawings.map {
-            ProjectTimelineItem(
-                id: "drawing-\($0.id.uuidString)",
-                date: $0.importedAt,
-                type: AppLocalization.string("图纸"),
-                title: $0.name,
-                subtitle: [$0.version, $0.fileType.uppercased(), $0.isCurrentVersion ? AppLocalization.string("当前版本") : AppLocalization.string("历史版本")].filter { !$0.isEmpty }.joined(separator: " · "),
-                systemImage: "doc.richtext",
-                tint: .appDoc,
-                targetMode: .assets
             )
         }
 
@@ -152,20 +159,22 @@ enum ProjectTimelineBuilder {
             )
         }
 
-        items += financialRecords.map {
-            ProjectTimelineItem(
-                id: "finance-\($0.id.uuidString)",
-                date: $0.date,
-                type: AppLocalization.string("记账"),
-                title: "\($0.normalizedDirection.displayName) \(ReportBuilder.money($0.amount))",
-                subtitle: [$0.normalizedCategory.displayName, $0.normalizedStatus.displayName, $0.counterparty].filter { !$0.isEmpty }.joined(separator: " · "),
-                systemImage: "receipt.fill",
-                tint: $0.normalizedDirection == .income ? .appSuccess : .appRisk,
-                targetMode: .finance
-            )
-        }
+        return items
+    }
 
-        items += documents.map {
+    private static func assetsTimelineItems(drawings: [ProjectDrawing], documents: [ProjectDocument]) -> [ProjectTimelineItem] {
+        drawings.map {
+            ProjectTimelineItem(
+                id: "drawing-\($0.id.uuidString)",
+                date: $0.importedAt,
+                type: AppLocalization.string("图纸"),
+                title: $0.name,
+                subtitle: [$0.version, $0.fileType.uppercased(), $0.isCurrentVersion ? AppLocalization.string("当前版本") : AppLocalization.string("历史版本")].filter { !$0.isEmpty }.joined(separator: " · "),
+                systemImage: "doc.richtext",
+                tint: .appDoc,
+                targetMode: .assets
+            )
+        } + documents.map {
             let methodSummary = linkedMethodSummary(count: $0.linkedConstructionMethodIDs.count)
             return ProjectTimelineItem(
                 id: "document-\($0.id.uuidString)",
@@ -179,6 +188,36 @@ enum ProjectTimelineBuilder {
                 systemImage: "doc.viewfinder.fill",
                 tint: .appDoc,
                 targetMode: .assets
+            )
+        }
+    }
+
+    private static func notesTimelineItems(_ quickNotes: [QuickNote]) -> [ProjectTimelineItem] {
+        quickNotes.map {
+            ProjectTimelineItem(
+                id: "note-\($0.id.uuidString)",
+                date: $0.createdAt,
+                type: AppLocalization.string("随手记"),
+                title: $0.title.isEmpty ? AppLocalization.string("随手记") : $0.title,
+                subtitle: $0.content,
+                systemImage: "square.and.pencil",
+                tint: .appPrimaryAction,
+                targetMode: .records
+            )
+        }
+    }
+
+    private static func ledgerTimelineItems(financialRecords: [ProjectFinancialRecord], warehouseMovements: [ProjectWarehouseMovement]) -> [ProjectTimelineItem] {
+        var items = financialRecords.map {
+            ProjectTimelineItem(
+                id: "finance-\($0.id.uuidString)",
+                date: $0.date,
+                type: AppLocalization.string("记账"),
+                title: "\($0.normalizedDirection.displayName) \(ReportBuilder.money($0.amount))",
+                subtitle: [$0.normalizedCategory.displayName, $0.normalizedStatus.displayName, $0.counterparty].filter { !$0.isEmpty }.joined(separator: " · "),
+                systemImage: "receipt.fill",
+                tint: $0.normalizedDirection == .income ? .appSuccess : .appRisk,
+                targetMode: .finance
             )
         }
 
@@ -195,26 +234,7 @@ enum ProjectTimelineBuilder {
             )
         }
 
-        items += quickNotes.map {
-            ProjectTimelineItem(
-                id: "note-\($0.id.uuidString)",
-                date: $0.createdAt,
-                type: AppLocalization.string("随手记"),
-                title: $0.title.isEmpty ? AppLocalization.string("随手记") : $0.title,
-                subtitle: $0.content,
-                systemImage: "square.and.pencil",
-                tint: .appPrimaryAction,
-                targetMode: .records
-            )
-        }
-
-        return items.sorted { lhs, rhs in
-            let lhsDate = timelineDate(lhs.date)
-            let rhsDate = timelineDate(rhs.date)
-            if lhsDate != rhsDate { return lhsDate > rhsDate }
-            if lhs.date != rhs.date { return lhs.date > rhs.date }
-            return lhs.id > rhs.id
-        }
+        return items
     }
 
     private static func timelineDate(_ text: BusinessDateValue) -> Date {

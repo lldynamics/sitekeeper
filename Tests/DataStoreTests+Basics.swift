@@ -116,10 +116,12 @@ extension DataStoreTests {
 
     // MARK: - MaterialPriceEntries
 
-    @Test func materialPriceEntriesAfterImport() {
-        testStore.importSampleData(replacingExisting: false)
+    @Test func materialPriceEntriesAfterImport() throws {
+        let sample = try #require(testStore.loadSampleFixtureSnapshot())
+        #expect(testStore.importSampleData(replacingExisting: false))
         #expect(!testStore.materialPriceEntries.isEmpty)
-        #expect(testStore.materialPriceEntries.contains { $0.name.contains("BV") })
+        #expect(Set(testStore.materialPriceEntries.map(\.id)) == Set(sample.materialPriceEntries.map(\.id)))
+        #expect(Set(testStore.materialPriceEntries.map(\.name)) == Set(sample.materialPriceEntries.map(\.name)))
     }
 
     // MARK: - supplierProfiles

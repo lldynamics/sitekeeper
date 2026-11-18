@@ -73,9 +73,6 @@ struct MaterialSheetView: View {
     private var totalLaborValue: MoneyValue {
         totals.labor
     }
-    private var grandTotalValue: MoneyValue {
-        totals.grand
-    }
     private var totalEstimateText: String {
         totals.estimateText
     }

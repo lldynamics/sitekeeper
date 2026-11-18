@@ -92,9 +92,11 @@ extension BackupView {
                     }
                     return
                 }
-                let enrichedPreview = await MainActor.run {
-                    enrichImportPreviewWithLocalImpact(preview)
+                let existingSnapshot = store.makeSnapshot(includePhotoFiles: false)
+                let enrichedPreview = try await FileIOTaskRunner.run(priority: .userInitiated) {
+                    BackupImportCoordinator.previewWithLocalImpact(preview, previous: existingSnapshot)
                 }
+                try Task.checkCancellation()
                 await MainActor.run {
                     isImportingBackup = false
                     importTask = nil
@@ -149,19 +151,5 @@ extension BackupView {
                 }
             }
         }
-    }
-
-    @MainActor
-    func enrichImportPreviewWithLocalImpact(_ preview: BackupImportPreview) -> BackupImportPreview {
-        let existingSnapshot = store.makeSnapshot(includePhotoFiles: false)
-        return BackupImportPreview(
-            snapshot: preview.snapshot,
-            manifest: preview.manifest,
-            incomingFiles: preview.incomingFiles,
-            overwrittenLocalFiles: BackupImportCoordinator.overwrittenLocalFiles(
-                previous: existingSnapshot,
-                imported: preview.snapshot
-            )
-        )
     }
 }

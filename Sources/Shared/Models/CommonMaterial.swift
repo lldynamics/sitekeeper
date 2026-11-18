@@ -102,10 +102,6 @@ enum MaterialLibrary {
 
     static var byCategory: [MaterialCategory: [CommonMaterial]] { catalogIndex.byCategory }
 
-    static func materials(for category: MaterialCategory) -> [CommonMaterial] {
-        catalogIndex.byCategory[category] ?? []
-    }
-
     static func decodeCatalog(from data: Data) throws -> [CommonMaterial] {
         try JSONDecoder().decode([CommonMaterial].self, from: data)
     }

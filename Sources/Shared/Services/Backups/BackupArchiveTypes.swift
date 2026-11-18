@@ -66,7 +66,7 @@ struct BackupImportProgress {
     }
 }
 
-struct BackupFileImpactSummary: Equatable {
+struct BackupFileImpactSummary: Equatable, Sendable {
     let photoFileNames: [String]
     let drawingFileNames: [String]
     let documentFileNames: [String]
@@ -101,11 +101,13 @@ struct BackupFileImpactSummary: Equatable {
     }
 }
 
-struct BackupImportPreview {
+struct BackupImportPreview: Sendable {
     let snapshot: BackupSnapshot
     let manifest: BackupArchiveManifest
     let incomingFiles: BackupFileImpactSummary
     let overwrittenLocalFiles: BackupFileImpactSummary
+    var mergeFilePlan: Result<BackupFileImpactSummary, any Error>? = nil
+    var overwriteFilePlan: Result<BackupFileImpactSummary, any Error>? = nil
 
     var photoFileCount: Int { incomingFiles.photoFileCount }
     var drawingFileCount: Int { incomingFiles.drawingFileCount }

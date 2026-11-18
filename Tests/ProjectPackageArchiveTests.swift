@@ -5,6 +5,77 @@ import UIKit
 
 @MainActor
 struct ProjectPackageArchiveTests {
+    @Test(arguments: Array(0..<6))
+    func projectPackageRejectsMetadataOnlyTraversalBeforeExport(family: Int) throws {
+        let project = Project(name: "Unsafe package", location: "", status: .active)
+        let name = "../outside-secret.bin"
+        let log = DailyLog(date: .empty, weather: "", content: "", workers: .empty, photos: [LogPhoto(fileName: name)])
+        #expect(throws: FileStorageError.self) {
+            try ReportBuilder.makeProjectPackageZIP(project: project, materials: [], quotes: [], labor: [],
+                logs: family == 0 ? [log] : [], tasks: [],
+                todos: family == 1 ? [SiteTodo(title: "Before", rectificationBeforePhotoFileName: name)]
+                    : family == 5 ? [SiteTodo(title: "After", rectificationAfterPhotoFileName: name)] : [],
+                drawings: family == 2 ? [ProjectDrawing(projectId: project.id, name: "Drawing", fileName: name, fileType: "pdf")] : [],
+                documents: family == 3 ? [ProjectDocument(projectId: project.id, title: "Document", fileName: name)] : [],
+                quickNotes: family == 4 ? [QuickNote(attachments: [QuickNoteAttachment(kind: .file, fileName: name)])] : [])
+        }
+    }
+
+    @Test func projectPackagePreservesRectificationOriginalsAndDocumentExtensions() throws {
+        let project = Project(name: "Rectification originals", location: "")
+        let beforeData = Self.photoData(color: .red)
+        let afterData = Self.photoData(color: .blue)
+        let beforeName = try PhotoStorage.saveOrThrow(original: beforeData, fileName: "old before-\(UUID().uuidString).JPG")
+        let afterName = try PhotoStorage.saveOrThrow(original: afterData, fileName: "old after-\(UUID().uuidString).jpg")
+        let csvData = Data("item,quantity\nsteel,2\n".utf8)
+        let csvName = try ProjectDocumentStorage.saveDataOrThrow(data: csvData, projectId: project.id, fileExtension: "csv")
+        defer {
+            PhotoStorage.delete(fileName: beforeName)
+            PhotoStorage.delete(fileName: afterName)
+            ProjectDocumentStorage.delete(fileName: csvName)
+        }
+        let todo = SiteTodo(
+            title: "Legacy / title", dueDate: BusinessDateValue(legacyText: "old/date/text"),
+            rectificationBeforePhotoFileName: beforeName, rectificationAfterPhotoFileName: afterName, isDone: true
+        )
+        let sharedTodo = SiteTodo(title: "Shared originals", rectificationBeforePhotoFileName: beforeName, rectificationAfterPhotoFileName: beforeName)
+        let document = ProjectDocument(projectId: project.id, title: "Schedule", fileName: csvName)
+        let log = DailyLog(date: BusinessDateValue(legacyText: "2001-02-03"), weather: "", content: "", workers: .empty,
+                           photos: [LogPhoto(fileName: beforeName, tag: .rectificationBefore)])
+        var progress: [ProjectPackageExportProgress] = []
+        let archiveURL = try ReportBuilder.makeProjectPackageZIP(
+            project: project, materials: [], quotes: [], labor: [], logs: [log], tasks: [],
+            todos: [todo, sharedTodo], documents: [document], progress: { progress.append($0) }
+        )
+        defer { try? FileManager.default.removeItem(at: archiveURL) }
+        let entries = try SimpleZipArchiveReader.read(Data(contentsOf: archiveURL))
+        let photoPath = "\(project.name)/03-site-photos/todos"
+        #expect(entries.first { $0.path == "\(photoPath)/\(todo.id)/before-\(beforeName)" }?.data == beforeData)
+        #expect(entries.first { $0.path == "\(photoPath)/\(todo.id)/after-\(afterName)" }?.data == afterData)
+        #expect(entries.first { $0.path == "\(photoPath)/\(sharedTodo.id)/before-\(beforeName)" }?.data == beforeData)
+        #expect(entries.first { $0.path == "\(photoPath)/\(sharedTodo.id)/after-\(beforeName)" }?.data == beforeData)
+        #expect(entries.first { $0.path == "\(project.name)/01-documents/Schedule-\(csvName)" }?.data == csvData)
+        #expect(entries.first { $0.path == "\(project.name)/03-site-photos/2001-02-03-整改前-\(beforeName)" }?.data == beforeData)
+        #expect(!entries.contains { $0.path.hasSuffix(".csv.pdf") })
+        #expect(progress.count == 14)
+        #expect(progress.allSatisfy { $0.totalSteps == 14 })
+        #expect(progress.last?.completedSteps == 14)
+        #expect(ProjectDetailImportExportActions.estimatedProjectPackageBytes(
+            documents: [document], drawings: [], logs: [log], quickNotes: [], todos: [todo, sharedTodo]
+        ) == csvData.count + beforeData.count * 4 + afterData.count)
+        #expect(ProjectDetailImportExportActions.missingProjectPackageFiles(
+            documents: [document], drawings: [], logs: [log], quickNotes: [], todos: [todo, sharedTodo]
+        ).isEmpty)
+    }
+
+    private static func photoData(color: UIColor) -> Data {
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
+            color.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        }
+        return image.jpegData(compressionQuality: 0.9) ?? Data()
+    }
+
     @Test func packageSizeDecisionWarnsWithoutRejectingLargeExports() {
         #expect(ProjectDetailImportExportActions.packageSizeDecision(for: 0) == .normal)
         #expect(ProjectDetailImportExportActions.packageSizeDecision(for: ProjectDetailImportExportActions.largePackageWarningBytes) == .warn)

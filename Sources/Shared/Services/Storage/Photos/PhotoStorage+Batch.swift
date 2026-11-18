@@ -44,10 +44,18 @@ extension PhotoStorage {
         directory: URL,
         checkpoint: (BatchCheckpoint) throws -> Void = { _ in }
     ) throws {
+        guard originals.count == fileNames.count else { throw FileStorageError.writeFailed("Photos") }
         guard !originals.isEmpty else { return }
         batchWriteLock.lock()
         defer { batchWriteLock.unlock() }
         try Task.checkCancellation()
+        // Preflight every original and thumbnail before creating staging or changing any target.
+        try AttachmentStoragePath.validateDirectory(directory)
+        for name in fileNames {
+            for folder in ["Photos", "PhotoThumbnails"] {
+                _ = try AttachmentStoragePath.fileURL(for: name, in: directory.appendingPathComponent(folder))
+            }
+        }
         let transaction = directory.appendingPathComponent(".photo-transaction-\(UUID().uuidString)", isDirectory: true)
         var attempted: [BatchTarget] = []
         do {
@@ -83,8 +91,9 @@ extension PhotoStorage {
             let thumbnail = try batchThumbnail(original)
             for (folder, data) in [("Photos", original), ("PhotoThumbnails", thumbnail)] {
                 try Task.checkCancellation()
-                let destination = directory.appendingPathComponent(folder, isDirectory: true)
-                    .appendingPathComponent(fileNames[index])
+                let destination = try AttachmentStoragePath.fileURL(
+                    for: fileNames[index], in: directory.appendingPathComponent(folder, isDirectory: true)
+                )
                 let target = try stageBatchTarget(data, destination: destination, position: targets.count,
                                                  transaction: transaction, checkpoint: checkpoint)
                 targets.append(target)
@@ -140,6 +149,7 @@ extension PhotoStorage {
     ) throws {
         for (index, target) in targets.enumerated() {
             try checkpoint(.commit(index))
+            try AttachmentStoragePath.validateFile(target.destination)
             try Task.checkCancellation()
             try FileManager.default.createDirectory(at: target.destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             attempted.append(target)
@@ -159,6 +169,7 @@ extension PhotoStorage {
         for (index, target) in attempted.reversed().enumerated() {
             do {
                 try checkpoint(.rollback(index))
+                try AttachmentStoragePath.validateFile(target.destination)
                 if let previous = target.previous {
                     try Data(contentsOf: previous).write(to: target.destination, options: .atomic)
                 } else {

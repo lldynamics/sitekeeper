@@ -104,10 +104,10 @@ struct QuickNoteAttachmentStrip: View {
     }
 
     private func label(for attachment: QuickNoteAttachment) -> String {
-        if attachment.attachmentKind == .audio, let duration = attachment.durationSeconds, duration > 0 {
+        if attachment.attachmentKind == .audio, let duration = attachment.displayDurationSeconds {
             return String(
                 format: AppLocalization.string("quick_note_attachment_audio_duration_format"),
-                Int(duration)
+                duration
             )
         }
         if attachment.attachmentKind == .video,
@@ -293,12 +293,12 @@ struct QuickNoteInlineAudioAttachmentPlayer: View {
     }
 
     private var title: String {
-        guard let duration = attachment.durationSeconds, duration > 0 else {
+        guard let duration = attachment.displayDurationSeconds else {
             return AppLocalization.string("quick_note_attachment_audio_title")
         }
         return String(
             format: AppLocalization.string("quick_note_attachment_audio_duration_format"),
-            Int(duration)
+            duration
         )
     }
 }

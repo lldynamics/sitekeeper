@@ -222,8 +222,8 @@ struct QuickNoteView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
-        .safeAreaInset(edge: .bottom) { messageComposer }
         .accessibilityIdentifier("quick-note-records-pane")
+        .safeAreaInset(edge: .bottom) { messageComposer }
     }
 
     private var draftProjectBinding: Binding<UUID?> {

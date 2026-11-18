@@ -40,10 +40,6 @@ struct ProjectFinancialRecordAddSheet: View {
     @State var showDuplicateConfirm = false
     @FocusState var isInputFocused: Bool
 
-    var availableCategories: [ProjectFinancialCategory] {
-        ProjectFinancialCategory.allowed(for: direction)
-    }
-
     init(
         projectId: UUID,
         preset: ProjectFinancialRecord? = nil,

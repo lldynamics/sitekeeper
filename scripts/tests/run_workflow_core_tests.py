@@ -44,6 +44,8 @@ for name in ['BusinessWorkflowOptimizationTests.swift','LargeDataOptimizationTes
  s=re.sub(r'^    @MainActor @Test.*?(?=^    @(?:MainActor|Test)|^})', '', s, flags=re.S|re.M)
  s=re.sub(r'^    @Test func (?:preparedRestoreInvalidates|failedAtomicWrite).*?(?=^    @Test|^})','',s,flags=re.S|re.M)
  (test/name).write_text(s)
+support=root/'Tests/Support/InMemoryBusinessWorkflowStore.swift'
+(test/support.name).write_bytes(support.read_bytes())
 (dest/'Package.swift').write_text('''// swift-tools-version: 6.0
 import PackageDescription
 let package = Package(name: "SitekeeperCoreValidation", platforms: [.macOS(.v14)], targets: [.target(name: "sitekeeper"), .testTarget(name: "CoreTests", dependencies: ["sitekeeper"])], swiftLanguageModes: [.v5])

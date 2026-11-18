@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-import UIKit
 @testable import sitekeeper
 
 @MainActor
@@ -90,7 +89,7 @@ struct ProjectStorageAndWarehouseTests {
     }
 
     @Test func photoStorageKeepsOriginalFileAndThumbnail() throws {
-        let original = try Self.makeJPEGData()
+        let original = try TestFixtures.makeJPEGData()
         let fileName = "original-\(UUID().uuidString).jpg"
         let saved = try PhotoStorage.saveOrThrow(original: original, fileName: fileName)
         defer { PhotoStorage.delete(fileName: saved) }
@@ -107,7 +106,7 @@ struct ProjectStorageAndWarehouseTests {
         let drawingSourceURL = FileManager.default.temporaryDirectory.appendingPathComponent("drawing-\(UUID().uuidString).pdf")
         try Data([0x05, 0x06, 0x07]).write(to: drawingSourceURL, options: .atomic)
         let drawing = try DrawingStorage.saveImportedFileOrThrow(from: drawingSourceURL, projectId: projectId)
-        let photoFile = try PhotoStorage.saveOrThrow(original: Self.makeJPEGData(), fileName: "photo-\(UUID().uuidString).jpg")
+        let photoFile = try PhotoStorage.saveOrThrow(original: TestFixtures.makeJPEGData(), fileName: "photo-\(UUID().uuidString).jpg")
         let attachmentFile = try QuickNoteAttachmentStorage.saveDataOrThrow(Data([0x08, 0x09, 0x0A, 0x0B, 0x0C]), fileName: "attachment-\(UUID().uuidString).bin")
 
         defer {
@@ -195,17 +194,5 @@ struct ProjectStorageAndWarehouseTests {
         #expect(result.failures.count == 1)
         #expect(result.failures[0].contains("文件"))
         #expect(result.failures[0].contains("过大"))
-    }
-
-    private static func makeJPEGData() throws -> Data {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4))
-        let image = renderer.image { context in
-            UIColor.orange.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
-        }
-        guard let data = image.jpegData(compressionQuality: 0.9) else {
-            throw FileStorageError.imageEncodingFailed
-        }
-        return data
     }
 }

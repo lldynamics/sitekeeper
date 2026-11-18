@@ -4,6 +4,47 @@ import Testing
 
 @MainActor
 struct DrawingImportCoordinatorTests {
+    @Test func exhaustedDrawingVersionsAreRejectedWithoutOverflow() {
+        let projectID = UUID()
+        var drawing = ProjectDrawing(projectId: projectID, name: "平面图", fileName: "plan.pdf", fileType: "pdf", version: "V\(Int.max)")
+        #expect(ProjectDetailDrawingHelper.nextDrawingVersion(name: drawing.name, drawings: [drawing]) == nil)
+        drawing.version = String(Int.max)
+        #expect(ProjectDetailDrawingHelper.nextDrawingVersion(name: drawing.name, drawings: [drawing]) == nil)
+        drawing.version = "V9999999999999999999999999999999999999"
+        #expect(ProjectDetailDrawingHelper.nextDrawingVersion(name: drawing.name, drawings: [drawing]) == nil)
+        drawing.version = "V9"
+        #expect(ProjectDetailDrawingHelper.nextDrawingVersion(name: drawing.name, drawings: [drawing]) == "V10")
+        #expect(ProjectDetailDrawingHelper.nextDrawingVersion(name: "其他图纸", drawings: [drawing]) == "V1")
+        drawing.version = "现场修订"
+        #expect(ProjectDetailDrawingHelper.nextDrawingVersion(name: drawing.name, drawings: [drawing]) == "V1")
+    }
+
+    @Test func exhaustedDrawingVersionDoesNotReplaceExistingDrawing() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("drawing-version-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sourceURL = directory.appendingPathComponent("平面图.pdf")
+        let sourceData = Data("test drawing".utf8)
+        try sourceData.write(to: sourceURL)
+        let store = DataStore(storageDirectory: directory)
+        await store.awaitInitialLoad()
+        let projectID = UUID()
+        let existing = ProjectDrawing(projectId: projectID, name: "平面图", fileName: "existing.pdf",
+                                      fileType: "pdf", version: "V\(Int.max)")
+        store.replaceProjects([Project(id: projectID, name: "项目", location: "")])
+        store.replaceProjectDrawings([existing])
+
+        let result = FileQuarantineStore.withRootURLForTesting(directory.appendingPathComponent("quarantine")) {
+            DrawingImportCoordinator.importDrawings([sourceURL], projectId: projectID, strategy: .createNewVersion,
+                                                   store: store, replacementCleanupSummary: "drawing-version-test")
+        }
+        #expect(result.importedCount == 0)
+        #expect(result.failures.count == 1)
+        #expect(store.projectDrawings.map(\.id) == [existing.id])
+        #expect(store.projectDrawings.first?.isCurrentVersion == true)
+        #expect(try Data(contentsOf: sourceURL) == sourceData)
+    }
+
     @Test func unsupportedSingleFileReturnsFailureWithoutAddingDrawing() throws {
         let store = DataStore()
         let projectId = UUID()
@@ -61,6 +102,95 @@ struct DrawingImportCoordinatorTests {
 
 @MainActor
 struct ConstructionMethodPackImportMappingTests {
+    @Test func remoteFetchRejectsOversizedAdvertisedAndStreamedResponses() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ConstructionPackTestURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let validURL = try #require(URL(string: "https://example.invalid/valid"))
+        let payload = try await ConstructionMethodPackImportService.fetch(from: validURL, session: session, maximumBytes: 128)
+        #expect(payload.packs.isEmpty)
+        for path in ["advertised", "streamed", "unknown-length"] {
+            let url = try #require(URL(string: "https://example.invalid/\(path)"))
+            do {
+                _ = try await ConstructionMethodPackImportService.fetch(from: url, session: session, maximumBytes: 128)
+                Issue.record("超限响应应被拒绝：\(path)")
+            } catch is ConstructionMethodPackLimitError {
+            } catch {
+                Issue.record("收到意外错误：\(error)")
+            }
+        }
+    }
+
+    @Test func downloadedBytesAreBoundedDuringConsumption() async throws {
+        func stream(_ count: Int) -> AsyncStream<UInt8> {
+            AsyncStream { continuation in
+                for _ in 0..<count { continuation.yield(0x41) }
+                continuation.finish()
+            }
+        }
+        let allowed = try await ConstructionMethodPackImportService.readBoundedBytes(stream(4), maximumBytes: 4)
+        #expect(allowed == Data(repeating: 0x41, count: 4))
+        do {
+            _ = try await ConstructionMethodPackImportService.readBoundedBytes(stream(5), maximumBytes: 4)
+            Issue.record("超限下载应在读取时被拒绝")
+        } catch is ConstructionMethodPackLimitError {
+        } catch {
+            Issue.record("收到意外错误：\(error)")
+        }
+    }
+
+    @Test func packLimitsProtectDecodingAndPreserveExistingCache() throws {
+        let pack = RemoteConstructionMethodPack(
+            id: "safe", sourceSlug: "safe", sourceURL: "/safe", sourceVersion: "1", title: "工艺",
+            trade: "电气", versionName: "V1", publishStatus: "已发布", tutorialBody: "说明",
+            procedureSteps: ["第一步"], qualityChecklist: [], safetyChecklist: [], relatedStandards: [],
+            relatedTemplates: [], relatedArticles: [], tags: [], updatedAt: "2026-01-01"
+        )
+        var payload = RemoteConstructionMethodPackPayload(schemaVersion: 1, generatedAt: "2026-01-01", count: 1, packs: [pack])
+        let validData = try JSONEncoder().encode(payload)
+        let decoded = try JSONDecoder().decode(RemoteConstructionMethodPackPayload.self, from: validData)
+        try ConstructionMethodPackLimits.validate(decoded)
+        #expect(decoded.packs.first?.procedureSteps == ["第一步"])
+
+        let domain = "sitekeeper.pack-tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let store = UserPreferencesStore(defaults: defaults)
+        let endpoint = try #require(URL(string: "https://example.invalid/packs"))
+        #expect(ConstructionMethodPackOfflineCacheStore.save(endpoint: endpoint, payload: payload,
+                                                            rawBytes: validData.count, store: store) != nil)
+        let previous = try #require(store.data(UserPreferenceKeys.constructionMethodPackOfflineCache))
+
+        payload.packs = Array(repeating: pack, count: ConstructionMethodPackLimits.maximumItems + 1)
+        let oversized = try JSONEncoder().encode(payload)
+        #expect(throws: ConstructionMethodPackLimitError.self) {
+            try JSONDecoder().decode(RemoteConstructionMethodPackPayload.self, from: oversized)
+        }
+        #expect(ConstructionMethodPackOfflineCacheStore.save(endpoint: endpoint, payload: payload,
+                                                            rawBytes: oversized.count, store: store) == nil)
+        #expect(store.data(UserPreferenceKeys.constructionMethodPackOfflineCache) == previous)
+        #expect(ConstructionMethodPackOfflineCacheStore.load(store: store)?.payload.packs.count == 1)
+
+        payload.packs = [pack]
+        payload.packs[0].procedureSteps = Array(repeating: "x", count: ConstructionMethodPackLimits.maximumItems + 1)
+        let oversizedNested = try JSONEncoder().encode(payload)
+        #expect(throws: ConstructionMethodPackLimitError.self) {
+            try JSONDecoder().decode(RemoteConstructionMethodPackPayload.self, from: oversizedNested)
+        }
+
+        var object = try #require(JSONSerialization.jsonObject(with: validData) as? [String: Any])
+        var packObjects = try #require(object["packs"] as? [[String: Any]])
+        packObjects[0]["tutorialBody"] = String(repeating: "x", count: ConstructionMethodPackLimits.maximumStringBytes + 1)
+        object["packs"] = packObjects
+        let longTextData = try JSONSerialization.data(withJSONObject: object)
+        let longText = try JSONDecoder().decode(RemoteConstructionMethodPackPayload.self, from: longTextData)
+        #expect(throws: ConstructionMethodPackLimitError.self) { try ConstructionMethodPackLimits.validate(longText) }
+        #expect(ConstructionMethodPackOfflineCacheStore.save(endpoint: endpoint, payload: longText,
+                                                            rawBytes: longTextData.count, store: store) == nil)
+        #expect(store.data(UserPreferenceKeys.constructionMethodPackOfflineCache) == previous)
+    }
+
     @Test func mappingNormalizesSourceAndKnowledgeReferences() {
         let pack = RemoteConstructionMethodPack(
             id: "method-pack-1",
@@ -182,4 +312,28 @@ struct ConstructionMethodPackImportMappingTests {
         #expect(unsupportedScheme == fallback)
         #expect(validEndpoint.absoluteString == "https://gongdizhishi.com/sitekeeper/method-packs.json")
     }
+}
+
+private final class ConstructionPackTestURLProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool {
+        request.url?.host == "example.invalid"
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let url = request.url else { return }
+        let path = url.lastPathComponent
+        let body = path == "valid"
+            ? Data(#"{"schemaVersion":1,"generatedAt":"2026-01-01","count":0,"packs":[]}"#.utf8)
+            : Data(repeating: 0x41, count: 129)
+        let length = path == "advertised" ? "129" : "1"
+        let headers = path == "unknown-length" ? [:] : ["Content-Length": length]
+        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: headers)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: body)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }

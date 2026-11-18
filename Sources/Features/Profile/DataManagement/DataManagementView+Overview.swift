@@ -2,7 +2,11 @@ import SwiftUI
 
 extension DataManagementView {
     var sampleDataImportEnabled: Bool {
+#if DEBUG
         AppFeatureFlags.allowsSampleDataImport || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+#else
+        false
+#endif
     }
 
     var showsUITestBackupPreviewShortcut: Bool {

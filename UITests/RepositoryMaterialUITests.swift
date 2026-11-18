@@ -1,7 +1,7 @@
 import XCTest
 
 @MainActor
-final class RepositoryMaterialUITests: XCTestCase {
+final class RepositoryMaterialUITests: RepositoryUITestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
     func testMaterialPagingEditRestartAndOriginalIsolation() {
@@ -22,7 +22,7 @@ final class RepositoryMaterialUITests: XCTestCase {
         price.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "0.4")
         app.buttons["repository-editor-save"].tap()
         assertTotal(app, "27.00")
-        attach(app, "candidate-materials-edited-total")
+        attachScreenshot(app, named: "candidate-materials-edited-total")
         app.terminate()
         _ = launch(reset: false, app: app)
         openLauncher(app)
@@ -73,7 +73,7 @@ final class RepositoryMaterialUITests: XCTestCase {
         price.typeText("0.1")
         app.buttons["repository-editor-save"].tap()
         assertTotal(app, "0.03")
-        attach(app, "candidate-materials-filtered-total")
+        attachScreenshot(app, named: "candidate-materials-filtered-total")
         let closeSearch = app.buttons["关闭"]
         if closeSearch.exists { closeSearch.tap() }
         else {
@@ -100,29 +100,12 @@ final class RepositoryMaterialUITests: XCTestCase {
         waitForExpectations(timeout: 10)
     }
 
-    private func attach(_ app: XCUIApplication, _ name: String) {
-        let image = XCTAttachment(screenshot: app.screenshot())
-        image.name = name
-        image.lifetime = .keepAlways
-        add(image)
-    }
-
     private func launch(reset: Bool, app: XCUIApplication = XCUIApplication()) -> XCUIApplication {
         app.launchArguments = ["-uitest-skip-onboarding", "-languageCode", "zh-Hans", "-AppleLanguages", "(zh-Hans)"]
         app.launchEnvironment = ["UITEST_SKIP_ONBOARDING": "1"]
         if reset { app.launchEnvironment.merge(["UITEST_RESET_STATE": "1", "UITEST_REPOSITORY_FIXTURE": "1", "UITEST_REPOSITORY_MATERIAL_FIXTURE": "1"]) { _, new in new } }
         app.launch()
         return app
-    }
-
-    private func openLauncher(_ app: XCUIApplication) {
-        let tab = app.tabBars.buttons["我的"]
-        let profile = tab.exists ? tab : app.buttons["primary-module-profile"]
-        XCTAssertTrue(profile.waitForExistence(timeout: 10))
-        profile.tap()
-        tapAfterScrolling(app.buttons["profile-settings-link"], app: app)
-        tapAfterScrolling(app.buttons["repository-workspace-entry"], app: app)
-        XCTAssertTrue(app.buttons["repository-workspace-create"].waitForExistence(timeout: 8))
     }
 
     private func openMaterials(_ app: XCUIApplication) {
@@ -133,14 +116,5 @@ final class RepositoryMaterialUITests: XCTestCase {
         XCTAssertTrue(entry.waitForExistence(timeout: 8))
         tapAfterScrolling(entry, app: app)
         XCTAssertTrue(app.buttons["repository-material-create"].waitForExistence(timeout: 8))
-    }
-
-    private func tapAfterScrolling(_ element: XCUIElement, app: XCUIApplication) {
-        for _ in 0..<8 {
-            if element.exists && element.isHittable { element.tap()
-            return }
-            app.swipeUp()
-        }
-        XCTFail("Missing entry: \(element)")
     }
 }

@@ -37,6 +37,39 @@ struct CloudBackupUploadStateTests {
         #expect(CloudBackupService.makeBackupFileName(date: date) != CloudBackupService.makeBackupFileName(date: date))
     }
 
+    @Test func retentionProtectsLatestConfirmedCompleteBackupOutsideRecentSlots() {
+        let files = [
+            file(8, .pending, scope: .complete), file(7, .uploaded, scope: .partial),
+            file(6, .uploaded, scope: .partial), file(5, .uploaded, scope: .partial),
+            file(4, .uploaded, scope: .partial), file(3, .uploaded),
+            file(2, .uploaded), file(1, .uploaded, scope: nil)
+        ]
+        #expect(CloudBackupRetentionPolicy.removableBackups(files, keeping: 3).map(\.fileName)
+            == ["backup-4.zip", "backup-2.zip", "backup-1.zip"])
+    }
+
+    @Test func legacyUploadsAreProtectedUntilACompleteBackupIsConfirmed() {
+        let files = [
+            file(6, .failed("offline"), scope: .complete), file(5, .pending, scope: .complete),
+            file(4, .uploaded, scope: .partial), file(3, .uploaded, scope: .partial),
+            file(2, .uploaded, scope: nil), file(1, .uploaded, scope: nil)
+        ]
+        #expect(CloudBackupRetentionPolicy.removableBackups(files, keeping: 1).map(\.fileName) == ["backup-3.zip"])
+        let withConfirmed = files + [file(7, .uploaded, scope: .complete)]
+        #expect(CloudBackupRetentionPolicy.removableBackups(withConfirmed, keeping: 1).map(\.fileName)
+            == ["backup-4.zip", "backup-3.zip", "backup-2.zip", "backup-1.zip"])
+    }
+
+    @Test func generatedFileNamesDistinguishScopeWithoutReadingTheArchive() {
+        let date = Date(timeIntervalSince1970: 100)
+        for scope in [CloudBackupScope.complete, .partial] {
+            let name = CloudBackupService.makeBackupFileName(date: date, scope: scope)
+            #expect(CloudBackupService.scope(forBackupFileName: name) == scope)
+        }
+        #expect(CloudBackupService.scope(forBackupFileName: CloudBackupService.makeBackupFileName(date: date)) == nil)
+        #expect(CloudBackupService.scope(forBackupFileName: "renamed-complete.zip") == nil)
+    }
+
     @Test func missingOrUnreadablePendingFileDoesNotPermitRepeatedAutomaticArchives() {
         #expect(CloudBackupRetentionPolicy.automaticBackupBlockReason(in: [], pendingFileName: "backup-5.zip") != nil)
         #expect(CloudBackupRetentionPolicy.automaticBackupBlockReason(in: [file(5, .failed("offline"))], pendingFileName: "backup-5.zip") != nil)
@@ -44,9 +77,9 @@ struct CloudBackupUploadStateTests {
         #expect(CloudBackupRetentionPolicy.automaticBackupBlockReason(in: [], pendingFileName: "") == nil)
     }
 
-    private func file(_ timestamp: Int, _ state: CloudBackupUploadState) -> CloudBackupFile {
+    private func file(_ timestamp: Int, _ state: CloudBackupUploadState, scope: CloudBackupScope? = .complete) -> CloudBackupFile {
         let name = "backup-\(timestamp).zip"
         return CloudBackupFile(id: name, fileURL: URL(fileURLWithPath: "/tmp/\(name)"), fileName: name,
-                               byteSize: 100, modifiedAt: Date(timeIntervalSince1970: Double(timestamp)), uploadState: state)
+                               byteSize: 100, modifiedAt: Date(timeIntervalSince1970: Double(timestamp)), uploadState: state, scope: scope)
     }
 }

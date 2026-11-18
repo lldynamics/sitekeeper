@@ -37,15 +37,6 @@ enum DataValueParser {
         return value
     }
 
-    static func parseDate(_ text: String, preferredFormatter: DateFormatter? = nil) -> Date? {
-        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { return nil }
-        if let preferredFormatter, let date = preferredFormatter.date(from: value) {
-            return date
-        }
-        return Formatters.parseDateOrDateTime(value)
-    }
-
     static func parseDate(_ value: BusinessDateValue, preferredFormatter: DateFormatter? = nil) -> Date? {
         value.date(in: preferredFormatter?.timeZone ?? .current)
     }

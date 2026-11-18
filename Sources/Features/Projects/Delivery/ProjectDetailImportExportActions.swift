@@ -28,7 +28,7 @@ enum ProjectDetailImportExportActions {
         // 缺失文件已由 ProjectDetailExportWorkflow.packageRequestDecision 前置检查；
         // 此处保留断言以防直接调用此方法时跳过预检。
         assert(
-            missingProjectPackageFiles(documents: documents, drawings: drawings, logs: logs, quickNotes: quickNotes).isEmpty,
+            missingProjectPackageFiles(documents: documents, drawings: drawings, logs: logs, quickNotes: quickNotes, todos: todos).isEmpty,
             "Missing files must be checked by packageRequestDecision before makeProjectPackageExport is called."
         )
 
@@ -62,18 +62,12 @@ enum ProjectDetailImportExportActions {
         documents: [ProjectDocument],
         drawings: [ProjectDrawing],
         logs: [DailyLog],
-        quickNotes: [QuickNote]
+        quickNotes: [QuickNote],
+        todos: [SiteTodo] = []
     ) -> Int {
-        var total = 0
-        total += documents.reduce(0) { $0 + ProjectDocumentStorage.fileSize(for: $1.fileName) }
-        total += drawings.reduce(0) { $0 + DrawingStorage.fileSize(for: $1.fileName) }
-        for photo in logs.flatMap(\.photoAttachments) {
-            total += PhotoStorage.fileSize(for: photo.fileName)
-        }
-        for attachment in quickNotes.flatMap(\.attachments) {
-            total += QuickNoteAttachmentStorage.fileSize(for: attachment.fileName)
-        }
-        return total
+        ReportBuilder.projectPackageSourceReferences(
+            documents: documents, drawings: drawings, logs: logs, quickNotes: quickNotes, todos: todos
+        ).reduce(0) { $0 + $1.fileBytes }
     }
 
     static func packageSizeDecision(for bytes: Int) -> PackageSizeDecision {
@@ -94,41 +88,11 @@ enum ProjectDetailImportExportActions {
         documents: [ProjectDocument],
         drawings: [ProjectDrawing],
         logs: [DailyLog],
-        quickNotes: [QuickNote]
+        quickNotes: [QuickNote],
+        todos: [SiteTodo] = []
     ) -> [String] {
-        var issues: [String] = []
-        issues += documents.compactMap { document in
-            ProjectDocumentStorage.exists(fileName: document.fileName)
-                ? nil
-                : String(format: AppLocalization.string("资料 %@"), document.title)
-        }
-        issues += drawings.compactMap { drawing in
-            DrawingStorage.exists(fileName: drawing.fileName)
-                ? nil
-                : String(format: AppLocalization.string("图纸 %@"), drawing.name)
-        }
-        for log in logs {
-            for photo in log.photoAttachments where !PhotoStorage.exists(fileName: photo.fileName) {
-                issues.append(
-                    String(
-                        format: AppLocalization.string("照片 %@ %@"),
-                        log.date.storageText,
-                        photo.tag.displayName
-                    )
-                )
-            }
-        }
-        for note in quickNotes {
-            for attachment in note.attachments where !QuickNoteAttachmentStorage.exists(fileName: attachment.fileName) {
-                let title = note.title.isEmpty ? note.createdAt.storageText : note.title
-                issues.append(
-                    String(
-                        format: AppLocalization.string("随手记附件 %@"),
-                        title
-                    )
-                )
-            }
-        }
-        return issues
+        ReportBuilder.projectPackageMissingOriginalEntries(
+            documents: documents, drawings: drawings, logs: logs, quickNotes: quickNotes, todos: todos
+        )
     }
 }

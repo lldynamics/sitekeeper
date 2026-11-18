@@ -39,7 +39,8 @@ require_pattern() {
 }
 
 reject_file "Sample data fixture in production resources" "Sources/Resources/Fixtures/SampleDataFixture.json"
-require_file "Sample data test fixture" "Tests/Fixtures/SampleDataFixture.json"
+require_pattern "Synthetic sample data builder" "Sources/Shared/Services/Fixtures/SampleDataFixture.swift" "enum SyntheticSampleFixtureBuilder"
+require_pattern "Synthetic sample data round-trip test" "Tests/SampleDataFixtureTests.swift" "syntheticFixtureIsDeterministicAndRoundTrips"
 
 require_pattern "BackupSnapshot schema version" "Sources/Shared/Services/Backups/BackupSnapshot.swift" "static let currentSchemaVersion = 3"
 require_pattern "BackupSnapshot strict schema gate" "Sources/Shared/Services/Backups/BackupSnapshot.swift" "guard Self.supportedSchemaVersions.contains(schemaVersion)"

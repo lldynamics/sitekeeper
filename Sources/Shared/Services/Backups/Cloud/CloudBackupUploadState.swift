@@ -42,17 +42,31 @@ enum CloudBackupRetentionPolicy {
         files.first { $0.fileName == fileName && $0.uploadState != .uploaded }
     }
 
-    /// Pending/failed uploads never count toward retention and are never deleted here.
     static func removableBackups(_ files: [CloudBackupFile], keeping count: Int) -> [CloudBackupFile] {
         guard count > 0 else { return [] }
-        return Array(files.filter { $0.uploadState == .uploaded }
-            .sorted { lhs, rhs in
-                if lhs.modifiedAt == rhs.modifiedAt { return lhs.fileName > rhs.fileName }
-                return lhs.modifiedAt > rhs.modifiedAt
-            }.dropFirst(count))
+        let confirmed = files.filter { $0.uploadState == .uploaded }.sorted { lhs, rhs in
+            if lhs.modifiedAt == rhs.modifiedAt { return lhs.fileName > rhs.fileName }
+            return lhs.modifiedAt > rhs.modifiedAt
+        }
+        let latestComplete = confirmed.first { $0.scope == .complete }
+        return confirmed.dropFirst(count).filter { file in
+            if let latestComplete { return file.id != latestComplete.id }
+            // A legacy backup may be the only full copy. Keep unknown scopes
+            // until another complete backup has confirmed both uploads.
+            return file.scope == .partial
+        }
     }
 
     static func latestConfirmedDate(_ files: [CloudBackupFile]) -> Date? {
         files.filter { $0.uploadState == .uploaded }.map(\.modifiedAt).max()
+    }
+}
+
+extension CloudBackupScope {
+    var displayName: String {
+        switch self {
+        case .complete: AppLocalization.string("完整备份")
+        case .partial: AppLocalization.string("部分备份")
+        }
     }
 }

@@ -6,10 +6,11 @@ extension SitekeeperUITests {
         openWorkflowDashboard(app)
         let overview = app.buttons["dashboard-more-overview"]
         if overview.exists { overview.tap() }
-        let past = element(app, identifier: "Past Week Work", scrollingAttempts: 12)
-        XCTAssertTrue(past.waitForExistence(timeout: 5))
+        let past = overdueProgressLink(app)
+        XCTAssertTrue(past.isHittable)
         past.tap()
-        XCTAssertTrue(app.navigationBars["施工进度"].waitForExistence(timeout: 5))
+        let modePicker = app.descendants(matching: .any)["progress-mode-picker"].firstMatch
+        XCTAssertTrue(modePicker.waitForExistence(timeout: 5))
         let week = app.buttons["本周"]
         XCTAssertTrue(week.waitForExistence(timeout: 5))
         week.tap()
@@ -18,6 +19,19 @@ extension SitekeeperUITests {
         XCTAssertFalse(app.staticTexts["Past Week Work"].exists)
         XCTAssertFalse(app.staticTexts["Next Week Work"].exists)
         attachScreenshot(app, named: "Weekly progress includes continuous construction")
+    }
+
+    private func overdueProgressLink(_ app: XCUIApplication) -> XCUIElement {
+        let overview = app.scrollViews["dashboard-ipad-overview-scroll"]
+        guard overview.exists else {
+            return element(app, identifier: "Past Week Work", scrollingAttempts: 12)
+        }
+        // The timeline can show the same title but opens a different destination.
+        let link = overview.buttons.matching(NSPredicate(
+            format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "dashboard-overdue-item-", "Past Week Work"
+        )).firstMatch
+        for _ in 0..<8 where !link.isHittable { overview.swipeUp() }
+        return link
     }
 
     func testTodoDraftRestoresTextAndBothPhotosAfterRestartCancelAndDiscard() {
@@ -103,14 +117,11 @@ extension SitekeeperUITests {
         let secondID = "search-suggestion-quote-60000000-0000-0000-0000-000000000011"
         XCTAssertTrue(app.buttons[firstID].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons[secondID].exists)
-        app.buttons["dashboard-search-category-filter"].tap()
-        app.buttons["财务记录"].tap()
+        selectWorkflowSearchFilter(app, kind: "category", optionID: "dashboard-search-category-option-financial", title: "财务记录")
         XCTAssertFalse(app.buttons[firstID].exists)
-        app.buttons["dashboard-search-category-filter"].tap()
-        app.buttons["预结算信息"].tap()
+        selectWorkflowSearchFilter(app, kind: "category", optionID: "dashboard-search-category-option-quote", title: "预结算信息")
         XCTAssertTrue(app.buttons[firstID].waitForExistence(timeout: 5))
-        app.buttons["dashboard-search-project-filter"].tap()
-        app.buttons["Workflow Alpha"].tap()
+        selectWorkflowSearchFilter(app, kind: "project", optionID: "dashboard-search-project-option-60000000-0000-0000-0000-000000000001", title: "Workflow Alpha")
         XCTAssertTrue(app.buttons[firstID].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons[secondID].exists)
         app.buttons[firstID].tap()
@@ -149,6 +160,26 @@ extension SitekeeperUITests {
 
     func testBusinessSearchOpensExactDocument() {
         assertWorkflowSearchDestination(keyword: "DOC-WORKFLOW-001", category: "document", suffix: "030", title: "扫描件详情")
+    }
+
+    private func selectWorkflowSearchFilter(_ app: XCUIApplication, kind: String, optionID: String, title: String) {
+        let separateFilter = app.buttons["dashboard-search-\(kind)-filter"]
+        if separateFilter.exists && separateFilter.isHittable {
+            separateFilter.tap()
+        } else {
+            let combinedFilter = app.buttons["dashboard-search-combined-filter"]
+            XCTAssertTrue(combinedFilter.waitForExistence(timeout: 5))
+            combinedFilter.tap()
+            let submenu = app.buttons["dashboard-search-\(kind)-submenu"]
+            XCTAssertTrue(submenu.waitForExistence(timeout: 5))
+            submenu.tap()
+        }
+        // UIKit can expose nested SwiftUI menu actions by title without their identifier.
+        let option = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", optionID, title)).firstMatch
+        let optionExists = option.waitForExistence(timeout: 5)
+        if !optionExists { print("Search filter hierarchy for \(title): \(app.debugDescription)") }
+        XCTAssertTrue(optionExists, title)
+        option.tap()
     }
 
     private func assertWorkflowSearchDestination(keyword: String, category: String, suffix: String, title: String) {

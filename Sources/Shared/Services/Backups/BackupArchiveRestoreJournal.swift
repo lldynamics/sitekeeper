@@ -116,14 +116,24 @@ final class BackupArchiveRestoreJournal {
         for family in Family.allCases {
             let stage = stageRoot.appendingPathComponent(family.stageDirectory, isDirectory: true)
             let mapping = family.destinations(policy)
+            var destinationsByKey: [String: String] = [:]
+            for (source, destination) in mapping ?? [:] {
+                let key = AttachmentStoragePath.comparisonKey(source)
+                if let existing = destinationsByKey[key], existing != destination {
+                    throw BackupArchiveError.restoreFailed(AppLocalization.string("备份中的附件名称存在冲突，已停止恢复。"))
+                }
+                destinationsByKey[key] = destination
+            }
             for source in try manager.contentsOfDirectory(at: stage, includingPropertiesForKeys: nil).sorted(by: { $0.path < $1.path }) {
                 let name = source.lastPathComponent
-                guard let destination = mapping?[name] ?? (mapping == nil ? name : nil) else { continue }
+                guard let destination = mapping?[name]
+                    ?? destinationsByKey[AttachmentStoragePath.comparisonKey(name)]
+                    ?? (mapping == nil ? name : nil) else { continue }
                 try validateLeaf(name)
                 try validateLeaf(destination)
-                try validateLocation(source)
+                try AttachmentStoragePath.validateFile(source)
                 let target = family.target(destination)
-                try validateLocation(target)
+                try AttachmentStoragePath.validateFile(target)
                 let existed = manager.fileExists(atPath: target.path)
                 if existed && !policy.overwritesExistingFiles { continue }
                 if existed {
@@ -181,7 +191,7 @@ final class BackupArchiveRestoreJournal {
         for (index, entry) in record.entries.enumerated().reversed() {
             try fault?(.beforeRollback(index))
             let target = entry.family.target(entry.destination)
-            try Self.validateLocation(target)
+            try AttachmentStoragePath.validateFile(target)
             if entry.originalExisted {
                 try Self.atomicCopy(root.appendingPathComponent("rollback/\(index).bak"), to: target)
             } else if FileManager.default.fileExists(atPath: target.path) {
@@ -249,7 +259,7 @@ final class BackupArchiveRestoreJournal {
             for entry in record.entries {
                 try validateLeaf(entry.source)
                 try validateLeaf(entry.destination)
-                try validateLocation(entry.family.target(entry.destination))
+                try AttachmentStoragePath.validateFile(entry.family.target(entry.destination))
             }
             let journal = BackupArchiveRestoreJournal(root: root, storeURL: storeURL, record: record)
             if record.phase == .finished {
@@ -292,14 +302,16 @@ private extension BackupArchiveRestoreJournal {
     }
 
     private static func validateLeaf(_ name: String) throws {
-        guard !name.isEmpty, name != ".", name != "..", !name.contains("/"),
-              !name.contains("\\"), !name.contains("\0") else { throw recoveryError() }
+        guard AttachmentStoragePath.isSafeLeaf(name) else { throw recoveryError() }
     }
 
-    /// Reject symlinks at every existing path component, including the storage family root.
+    /// Reject symlinks at every existing path component inside app-controlled storage.
     private static func validateLocation(_ url: URL) throws {
+        guard url.isFileURL else { throw recoveryError() }
         var cursor = url.standardizedFileURL
+        let boundaries = AttachmentStoragePath.sandboxRootBoundaries()
         while cursor.path != "/" {
+            if boundaries.contains(cursor.path) { break }
             if let type = try? FileManager.default.attributesOfItem(atPath: cursor.path)[.type],
                type as? FileAttributeType == .typeSymbolicLink {
                 // /var and /tmp are system aliases; resolving these outside our sandbox is safe.
@@ -310,8 +322,8 @@ private extension BackupArchiveRestoreJournal {
     }
 
     private static func atomicCopy(_ source: URL, to destination: URL) throws {
-        try validateLocation(source)
-        try validateLocation(destination)
+        try AttachmentStoragePath.validateFile(source)
+        try AttachmentStoragePath.validateFile(destination)
         let manager = FileManager.default
         try manager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         let temporary = destination.deletingLastPathComponent().appendingPathComponent(".restore-\(UUID().uuidString)")

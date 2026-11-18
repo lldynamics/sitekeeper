@@ -12,6 +12,78 @@ import Testing
     )
 )
 struct BackupWorkflowIntegrationTests {
+    @Test func oldArchiveWithIdenticalCaseAliasesRestoresOneSharedAttachment() async throws {
+        let fixture = try await BackupWorkflowIntegrationFixture.make()
+        defer { fixture.cleanup() }
+        let alias = fixture.sharedFileName.uppercased()
+        let archiveURL = try fixture.makeArchive(
+            attachmentNames: [alias, fixture.sharedFileName],
+            archiveFileNames: [fixture.sharedFileName, alias]
+        )
+        let result = try await BackupImportWorkflow.run(
+            sourceURL: archiveURL, preparedMetadata: nil,
+            operations: LiveBackupImportWorkflowOperations(store: fixture.store, selectedImportMode: { .merge }),
+            onEvent: { _ in }
+        )
+        let note = try #require(fixture.store.quickNotes.first { $0.id == fixture.incomingNoteID })
+        let names = note.attachments.map(\.fileName)
+        #expect(names.count == 2 && names[0] == names[1])
+        #expect(QuickNoteAttachmentStorage.data(for: names[0]) == fixture.incomingData)
+        #expect(QuickNoteAttachmentStorage.data(for: fixture.sharedFileName) == fixture.localData)
+        #expect(result.restoredFileCount == 1)
+        try await fixture.expectReloadMatchesCurrentMetadata()
+    }
+
+    @Test func backupWithSharedCaseAliasesProducesARestorableArchive() async throws {
+        let fixture = try await BackupWorkflowIntegrationFixture.make()
+        defer { fixture.cleanup() }
+        var snapshot = fixture.store.makeSnapshot(includePhotoFiles: false)
+        snapshot.quickNotes[0].attachments.append(QuickNoteAttachment(kind: .file, fileName: fixture.sharedFileName.uppercased()))
+        let archive = try BackupArchiveService.makeArchive(from: snapshot)
+        defer { try? FileManager.default.removeItem(at: archive.fileURL) }
+        #expect(archive.missingFiles.isEmpty)
+        let transaction = try BackupArchiveService.prepareEmbeddedFileRestore(from: archive.fileURL)
+        transaction.cancel()
+        #expect(QuickNoteAttachmentStorage.data(for: fixture.sharedFileName) == fixture.localData)
+    }
+
+    @Test func liveMergeKeepsCaseAliasesOfOneImportedAttachmentTogether() async throws {
+        let fixture = try await BackupWorkflowIntegrationFixture.make()
+        defer { fixture.cleanup() }
+        let alias = fixture.sharedFileName.uppercased()
+        let archiveURL = try fixture.makeArchive(attachmentNames: [alias, fixture.sharedFileName])
+        _ = try await BackupImportWorkflow.run(
+            sourceURL: archiveURL, preparedMetadata: nil,
+            operations: LiveBackupImportWorkflowOperations(store: fixture.store, selectedImportMode: { .merge }),
+            onEvent: { _ in }
+        )
+        let note = try #require(fixture.store.quickNotes.first { $0.id == fixture.incomingNoteID })
+        let names = note.attachments.map(\.fileName)
+        #expect(names.count == 2)
+        #expect(names[0] == names[1])
+        #expect(names[0] != fixture.sharedFileName)
+        #expect(QuickNoteAttachmentStorage.data(for: names[0]) == fixture.incomingData)
+        #expect(QuickNoteAttachmentStorage.data(for: fixture.sharedFileName) == fixture.localData)
+        try await fixture.expectReloadMatchesCurrentMetadata()
+    }
+
+    @Test func liveOverwriteDoesNotCleanUpCaseAliasOfRestoredAttachment() async throws {
+        let fixture = try await BackupWorkflowIntegrationFixture.make()
+        defer { fixture.cleanup() }
+        let alias = fixture.sharedFileName.uppercased()
+        let archiveURL = try fixture.makeArchive(attachmentNames: [alias], archiveFileNames: [alias])
+        _ = try await BackupImportWorkflow.run(
+            sourceURL: archiveURL, preparedMetadata: nil,
+            operations: LiveBackupImportWorkflowOperations(store: fixture.store, selectedImportMode: { .overwrite }),
+            onEvent: { _ in }
+        )
+        #expect(fixture.importedAttachmentName == fixture.sharedFileName)
+        #expect(QuickNoteAttachmentStorage.data(for: fixture.sharedFileName) == fixture.incomingData)
+        #expect(!QuickNoteAttachmentStorage.exists(fileName: fixture.obsoleteFileName))
+        #expect(QuickNoteAttachmentStorage.data(for: fixture.sentinelFileName) == fixture.sentinelData)
+        try await fixture.expectReloadMatchesCurrentMetadata()
+    }
+
     @Test func liveMergeRenamesCollidingAttachmentAndPersistsAcrossReload() async throws {
         let fixture = try await BackupWorkflowIntegrationFixture.make()
         defer { fixture.cleanup() }

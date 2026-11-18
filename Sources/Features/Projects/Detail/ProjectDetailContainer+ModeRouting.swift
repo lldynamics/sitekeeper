@@ -30,5 +30,4 @@ extension ProjectDetailContainer {
         _ = availableWidth
         return usesSingleCanvasLayoutOnPad
     }
-
 }

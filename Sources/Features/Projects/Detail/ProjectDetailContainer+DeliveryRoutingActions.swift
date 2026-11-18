@@ -80,19 +80,17 @@ extension ProjectDetailContainer {
                 documents: snapshot.relatedDocuments,
                 drawings: snapshot.relatedDrawings,
                 logs: snapshot.relatedLogs,
-                quickNotes: snapshot.relatedQuickNotes
+                quickNotes: snapshot.relatedQuickNotes,
+                todos: snapshot.relatedTodos
             ),
             estimatedPackageBytes: ProjectDetailImportExportActions.estimatedProjectPackageBytes(
                 documents: snapshot.relatedDocuments,
                 drawings: snapshot.relatedDrawings,
                 logs: snapshot.relatedLogs,
-                quickNotes: snapshot.relatedQuickNotes
+                quickNotes: snapshot.relatedQuickNotes,
+                todos: snapshot.relatedTodos
             )
         )
-    }
-
-    func drawingWithoutCurrentCount(_ drawings: [ProjectDrawing]) -> Int {
-        drawingGroupsWithoutCurrentVersion(drawings).count
     }
 
     func drawingGroupsWithoutCurrentVersion(_ drawings: [ProjectDrawing]) -> [String] {
@@ -199,7 +197,8 @@ extension ProjectDetailContainer {
             documents: snapshot.relatedDocuments,
             drawings: snapshot.relatedDrawings,
             logs: snapshot.relatedLogs,
-            quickNotes: snapshot.relatedQuickNotes
+            quickNotes: snapshot.relatedQuickNotes,
+            todos: snapshot.relatedTodos
         )
         return entries.contains { entry in
             entry.localizedStandardContains(AppLocalization.string("图纸")) || entry.localizedCaseInsensitiveContains("drawing")

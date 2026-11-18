@@ -1,7 +1,7 @@
 import XCTest
 
 @MainActor
-final class RepositoryWorkspaceUITests: XCTestCase {
+final class RepositoryWorkspaceUITests: RepositoryUITestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
     func testPagingEditingAndReopeningCandidatePreservesOriginal() {
@@ -97,24 +97,5 @@ final class RepositoryWorkspaceUITests: XCTestCase {
         if fixture { app.launchEnvironment["UITEST_REPOSITORY_FIXTURE"] = "1" }
         app.launch()
         return app
-    }
-
-    private func openLauncher(_ app: XCUIApplication) {
-        let tab = app.tabBars.buttons["我的"]
-        let profile = tab.exists ? tab : app.buttons["primary-module-profile"]
-        XCTAssertTrue(profile.waitForExistence(timeout: 10))
-        profile.tap()
-        tapAfterScrolling(app.buttons["profile-settings-link"], app: app)
-        tapAfterScrolling(app.buttons["repository-workspace-entry"], app: app)
-        XCTAssertTrue(app.buttons["repository-workspace-create"].waitForExistence(timeout: 8))
-    }
-
-    private func tapAfterScrolling(_ element: XCUIElement, app: XCUIApplication) {
-        for _ in 0..<8 {
-            if element.exists && element.isHittable { element.tap()
-            return }
-            app.swipeUp()
-        }
-        XCTFail("Missing entry: \(element)")
     }
 }

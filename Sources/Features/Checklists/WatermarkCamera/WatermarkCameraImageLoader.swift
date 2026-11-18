@@ -65,11 +65,4 @@ actor WatermarkCameraImageLoader {
     func imageForDelivery(_ photo: WatermarkCapturedPhoto) throws -> UIImage {
         try photo.imageForDelivery()
     }
-
-    func originalImage(for photo: WatermarkCapturedPhoto) -> UIImage? { photo.originalImage }
-
-    func removeCachedImages() {
-        entries.removeAll()
-        decodedCost = 0
-    }
 }

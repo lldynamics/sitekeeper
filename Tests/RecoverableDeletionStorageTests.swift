@@ -15,7 +15,7 @@ struct RecoverableDeletionStorageTests {
             summary: "isolated manifest",
             createdAt: Date(),
             expiresAt: Date(timeIntervalSinceNow: 60),
-            snapshot: emptyUndoSnapshot(),
+            snapshot: StorageCleanupTrashTestSupport.emptyUndoSnapshot(),
             files: []
         )
 
@@ -159,18 +159,6 @@ struct RecoverableDeletionStorageTests {
         }
 
         for source in sources { #expect(try Data(contentsOf: source) == Data([0x41])) }
-    }
-
-    private func emptyUndoSnapshot() -> StorageCleanupUndoSnapshot {
-        StorageCleanupUndoSnapshot(
-            dailyLogs: [],
-            siteTodos: [],
-            quickNotes: [],
-            projectDrawings: [],
-            projectDocuments: [],
-            projectFinancialRecords: [],
-            projectWarehouseMovements: []
-        )
     }
 
     private func write(_ data: Data, to url: URL) throws {

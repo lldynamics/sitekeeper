@@ -72,10 +72,6 @@ extension ProjectFinancialRecordAddSheet {
 }
 
 extension ProjectFinancialRecordEditSheet {
-    var availableCategories: [ProjectFinancialCategory] {
-        ProjectFinancialCategory.allowed(for: direction)
-    }
-
     var linkedOCRCandidates: [ProjectDocument] {
         ProjectFinancialReceiptOCRSupport.ocrCandidates(from: linkedDocuments)
     }

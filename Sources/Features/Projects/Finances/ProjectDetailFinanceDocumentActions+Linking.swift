@@ -39,8 +39,15 @@ extension ProjectDetailFinanceDocumentActions {
            let previousVersion = store.projectDocuments.first(where: { $0.id == previousVersionId }) {
             if previousVersion.replacesDocumentId == normalized.id {
                 normalized.replacesDocumentId = nil
-            } else if normalized.versionNumber <= previousVersion.normalizedVersionNumber {
-                normalized.versionNumber = min(999, previousVersion.normalizedVersionNumber + 1)
+            } else {
+                if let nextVersion = previousVersion.nextEditableVersionNumber,
+                   normalized.versionNumber <= previousVersion.normalizedVersionNumber {
+                    normalized.versionNumber = nextVersion
+                } else if previousVersion.nextEditableVersionNumber == nil {
+                    guard previous.replacesDocumentId == previousVersion.id,
+                          previous.normalizedVersionNumber > previousVersion.normalizedVersionNumber,
+                          normalized.versionNumber == previous.versionNumber else { return }
+                }
             }
         }
         store.updateProjectDocument(normalized)

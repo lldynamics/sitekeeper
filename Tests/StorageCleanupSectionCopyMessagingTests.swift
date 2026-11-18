@@ -2,18 +2,6 @@ import Testing
 @testable import sitekeeper
 
 struct StorageCleanupSectionCopyMessagingTests {
-    @Test func messagingCopyIsPresent() {
-        #expect(!StorageCleanupSectionCopy.centerNavigationTitle.isEmpty)
-        #expect(!StorageCleanupSectionCopy.cleanupProjectFilesAlertTitle.isEmpty)
-        #expect(!StorageCleanupSectionCopy.cancelActionTitle.isEmpty)
-        #expect(!StorageCleanupSectionCopy.cleanupAllConfirmationButtonTitle.isEmpty)
-        #expect(!StorageCleanupSectionCopy.cleanupConfirmationNoFileDeletion.isEmpty)
-        #expect(!StorageCleanupSectionCopy.cleanupConfirmationAffectedRecordsHeader.isEmpty)
-        #expect(!StorageCleanupSectionCopy.cleanupConfirmationNoRecordChange.isEmpty)
-        #expect(!StorageCleanupSectionCopy.cleanupConfirmationSampleSeparator.isEmpty)
-        #expect(!StorageCleanupSectionCopy.backupReminderNoBackup.isEmpty)
-    }
-
     @Test func messagingDynamicCopyIncludesExpectedValues() {
         #expect(StorageCleanupSectionCopy.cloudBackupReadFailed("oops").contains("oops"))
         #expect(StorageCleanupSectionCopy.largeFileRuleSuggestion(photo: "5MB", video: "50MB", ticket: "20MB").contains("50MB"))

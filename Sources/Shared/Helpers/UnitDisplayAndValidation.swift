@@ -44,10 +44,6 @@ enum UnitDisplay {
 }
 
 enum InputValidator {
-    static func nonNegativeNumber<Value: DecimalDomainValue>(_ value: Value) -> Bool {
-        value.optionalDecimal.map { $0 >= .zero } ?? false
-    }
-
     static func validate<Value: DecimalDomainValue>(
         _ value: Value, kind: NumericInputKind, requirement: NumericInputRequirement
     ) -> NumericInputValidation {

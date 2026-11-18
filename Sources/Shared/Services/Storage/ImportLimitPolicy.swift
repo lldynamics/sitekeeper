@@ -34,6 +34,17 @@ enum TransferLimitPolicy {
     static let profileUserDefaultsKey = UserPreferenceKeys.transferLimitProfile
 
     static var activeProfile: TransferLimitProfile {
+#if DEBUG
+        return resolvedRuntimeProfile()
+#else
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            return resolvedRuntimeProfile()
+        }
+        return .production
+#endif
+    }
+
+    private static func resolvedRuntimeProfile() -> TransferLimitProfile {
         let preferenceStore = UserPreferencesStore.shared
         return resolveProfile(
             userDefaultRaw: preferenceStore.string(
@@ -115,10 +126,6 @@ enum TransferLimitPolicy {
 
 enum ImportLimitPolicy {
     static var maxImportBytes: Int { TransferLimitPolicy.maxImportBytes }
-
-    static func formattedBytes(_ bytes: Int) -> String {
-        TransferLimitPolicy.formattedBytes(bytes)
-    }
 
     static func genericTooLargeMessage(itemName: String, size: Int, limit: Int = maxImportBytes) -> String {
         TransferLimitPolicy.genericTooLargeMessage(itemName: itemName, size: size, limit: limit)

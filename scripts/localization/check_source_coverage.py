@@ -9,7 +9,16 @@ import re
 
 QUOTED = r'"((?:[^"\\]|\\.)*)"'
 ENTRY = re.compile(QUOTED + r'\s*=\s*' + QUOTED + r'\s*;', re.DOTALL)
-REQUEST = re.compile(r'\b(?:String\(\s*localized:\s*|AppLocalization\.string\(\s*)' + QUOTED)
+REQUEST = re.compile(
+    r'(?<![A-Za-z0-9_.])(?:'
+    r'String\(\s*localized:\s*'
+    r'|AppLocalization\.string\(\s*'
+    r'|(?:ReportBuilder\.)?loc(?:Format)?\(\s*'
+    r'|calculatorLoc(?:Format)?\(\s*'
+    r'|widgetText\(\s*'
+    r'|widgetLocalized(?:Count|Update)\(\s*'
+    r')' + QUOTED
+)
 FORMAT = re.compile(r'%(?:(\d+)\$)?[-+#0 ]*(?:\d+|\*)?(?:\.(?:\d+|\*))?(hh|ll|h|l|q|z|t|j)?([@diuoxXfFeEgGaAcCsSp])')
 
 

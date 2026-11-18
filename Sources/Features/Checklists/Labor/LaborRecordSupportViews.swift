@@ -257,7 +257,7 @@ struct LaborRecordEditSheet: View {
                 }
             }
             Section(AppLocalization.string("备注")) {
-                TextField(AppLocalization.string("备注"), text: $note, axis: .vertical)
+                TextField(AppLocalization.string("备注"), text: $note, prompt: Text(verbatim: ""), axis: .vertical)
                     .lineLimit(2...5)
             }
             AppBusinessFormDestructiveActionSection(title: AppLocalization.string("删除人工记录")) {

@@ -1,6 +1,5 @@
 import Testing
 import Foundation
-import UIKit
 @testable import sitekeeper
 
 @MainActor
@@ -106,11 +105,11 @@ struct DataStoreTests {
         testStore.clearAllBusinessData(deleteStoredFiles: false)
         let project = Project(name: "文件项目", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
         let photoFile = try PhotoStorage.saveOrThrow(
-            original: Self.makeJPEGData(),
+            original: TestFixtures.makeJPEGData(),
             fileName: "project-delete-photo-\(UUID().uuidString).jpg"
         )
         let todoPhotoFile = try PhotoStorage.saveOrThrow(
-            original: Self.makeJPEGData(),
+            original: TestFixtures.makeJPEGData(),
             fileName: "project-delete-todo-\(UUID().uuidString).jpg"
         )
         let documentFile = try ProjectDocumentStorage.savePDFOrThrow(data: Data([0x01, 0x02]), projectId: project.id)
@@ -382,17 +381,5 @@ extension DataStoreTests {
         let restored = DataStore(storageDirectory: storageDirectory)
         await restored.awaitInitialLoad()
         #expect(restored.projects.contains { $0.name == "flush pending" })
-    }
-
-    private static func makeJPEGData() throws -> Data {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4))
-        let image = renderer.image { context in
-            UIColor.orange.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
-        }
-        guard let data = image.jpegData(compressionQuality: 0.9) else {
-            throw FileStorageError.imageEncodingFailed
-        }
-        return data
     }
 }

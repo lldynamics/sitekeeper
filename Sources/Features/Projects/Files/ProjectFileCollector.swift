@@ -20,20 +20,10 @@ enum ProjectFileCollector {
     }
 
     @MainActor
-    static func items(for projectId: UUID, category: ProjectFileCategory, store: DataStore) -> [ProjectFileItem] {
-        items(for: projectId, category: category, projectStore: store.projectStore)
-    }
-
-    @MainActor
     static func allItems(for projectId: UUID, projectStore: ProjectStore) -> [ProjectFileItem] {
         ProjectFileCategory.allCases.flatMap { category in
             items(for: projectId, category: category, projectStore: projectStore)
         }
-    }
-
-    @MainActor
-    static func allItems(for projectId: UUID, store: DataStore) -> [ProjectFileItem] {
-        allItems(for: projectId, projectStore: store.projectStore)
     }
 
     @MainActor
@@ -63,11 +53,6 @@ enum ProjectFileCollector {
                 .filter { ![QuickNoteAttachmentKind.photo, .drawing].contains($0.attachmentKind) }
                 .count
         }
-    }
-
-    @MainActor
-    static func count(for projectId: UUID, category: ProjectFileCategory, store: DataStore) -> Int {
-        count(for: projectId, category: category, projectStore: store.projectStore)
     }
 
     private static func imageItems(in snapshot: ProjectFileCollectionSnapshot) -> [ProjectFileItem] {

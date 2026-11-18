@@ -16,7 +16,7 @@ struct RepositoryLaborEditorView: View {
     var body: some View {
         @Bindable var editor = editor
         RepositoryEditorForm(editor: editor, session: session, title: AppLocalization.string("人工记录"), canSave: canSave, command: { try $0.command() }) {
-            Section(AppLocalization.string("人工记录")) {
+            Section {
                 TextField(AppLocalization.string("班组"), text: $editor.draft.record.teamName).accessibilityIdentifier("repository-labor-team")
                 TextField(AppLocalization.string("工种"), text: $editor.draft.record.workType).accessibilityIdentifier("repository-labor-work-type")
                 TextField(AppLocalization.string("人数"), text: $editor.draft.workersText)

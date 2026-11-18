@@ -402,21 +402,6 @@ extension MaterialSheetExportRenderer {
         ReportBuilder.amountDisplay(value, currencyDisplayMode: currencyDisplayMode)
     }
 
-    static func amountDisplay(
-        rawText: String,
-        currencyDisplayMode: ExportCurrencyDisplayMode
-    ) -> String {
-        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "-" }
-        guard let decimal = DataValueParser.decimalValueIfPresent(from: trimmed) else {
-            return trimmed
-        }
-        return ReportBuilder.amountDisplay(
-            MoneyValue(decimal),
-            currencyDisplayMode: currencyDisplayMode
-        )
-    }
-
     static func displayText(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "-" : trimmed

@@ -15,7 +15,8 @@ struct PracticalProjectReportTests {
     }
     private func pdfText(_ data: Data) -> String {
         guard let document = PDFDocument(data: data) else { return "" }
-        return (0..<document.pageCount).compactMap { document.page(at: $0)?.string }.joined(separator: "\n")
+        return (0..<document.pageCount).compactMap { document.page(at: $0)?.string }
+            .joined(separator: "\n").precomposedStringWithCompatibilityMapping
     }
 
     @Test func civilDayRangeUsesLocalBoundariesAndRejectsUnknownDates() {
@@ -120,13 +121,13 @@ struct PracticalProjectReportTests {
 
     @Test func longConstructionContentSurvivesPDFPagination() throws {
         let project = Project(name: "A", location: "")
-        let text = String(repeating: "施工记录longtext", count: 650) + "VISIBLE_END_MARKER"
+        let text = String(repeating: "施工记录longtext", count: 650) + "VISIBLEENDMARKER"
         let log = DailyLog(date: date("2026-10-01"), weather: "", content: text, workers: 1, projectId: project.id)
         let report = ProjectFieldReport(project: project, period: period(), logs: [log], todos: [], tasks: [])
         let data = ReportBuilder.makeFieldReportPDF(report, title: "Test")
         let document = try #require(PDFDocument(data: data))
         #expect(document.pageCount > 1)
-        #expect(pdfText(data).replacingOccurrences(of: "\n", with: "").contains("VISIBLE_END_MARKER"))
+        #expect(pdfText(data).filter { !$0.isWhitespace }.contains(text.filter { !$0.isWhitespace }))
     }
 
     @Test func missingSelectedPhotoProducesExplicitCoverAndKeepsOtherPeriodsOut() async throws {

@@ -34,6 +34,8 @@ struct SampleDataFixtureTests {
         #expect(snapshot.projectContacts.count >= 8)
         #expect(snapshot.projectFinancialRecords.count >= 8)
         #expect(snapshot.materialSheetDrafts.count >= 4)
+        #expect(!snapshot.historyRecords.isEmpty)
+        #expect(snapshot.templates.contains { $0.category == .dailyLog && !$0.content.isEmpty })
         #expect(snapshot.photoFiles.count >= 4)
         #expect(snapshot.quickNoteAttachmentFiles.count >= 3)
 
@@ -65,6 +67,7 @@ struct SampleDataFixtureTests {
             + snapshot.projectDrawings.map(\.projectId) + snapshot.projectDocuments.map(\.projectId)
             + snapshot.projectFinancialRecords.map(\.projectId) + snapshot.projectContacts.map(\.projectId)
             + snapshot.progressTasks.map(\.projectId) + snapshot.projectWarehouseMovements.map(\.projectId)
+            + snapshot.historyRecords.compactMap(\.projectId)
         #expect(projectReferences.allSatisfy { projectIDs.contains($0) })
         #expect(drawingFileNames.count == snapshot.drawingFiles.count)
         #expect(documentFileNames.count == snapshot.documentFiles.count)

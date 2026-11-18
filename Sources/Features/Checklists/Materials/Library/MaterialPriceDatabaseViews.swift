@@ -351,7 +351,7 @@ struct MaterialPriceEditSheet: View {
                     }
                 }
                 Section(AppLocalization.string("备注")) {
-                    TextField(AppLocalization.string("备注"), text: $note, axis: .vertical)
+                    TextField(AppLocalization.string("备注"), text: $note, prompt: Text(verbatim: ""), axis: .vertical)
                         .lineLimit(3...6)
                 }
                 if entry != nil {

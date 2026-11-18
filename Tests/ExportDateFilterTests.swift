@@ -1,9 +1,63 @@
 import Testing
 import Foundation
+import PDFKit
 @testable import sitekeeper
 
 @MainActor
 struct ExportDateFilterTests {
+
+    @Test func projectScopedExportExcludesGlobalAuditInEveryFormatAndSelectionCount() throws {
+        let project = Project(name: "项目甲", location: "")
+        let snapshot = BackupSnapshot(
+            materialItems: [], quoteItems: [], laborRecords: [], projects: [project],
+            dailyLogs: [], historyRecords: [], templates: []
+        )
+        let entry = OperationAuditEntry(
+            id: UUID(), timestamp: 1_766_000_000, action: .delete, outcome: .succeeded,
+            summary: "AUDITCANARY", detail: "PROJECTCANARY", source: "Tests"
+        )
+        let requested = ExportContentOptions(
+            includeMaterials: false, includeQuotes: false, includeLabor: false,
+            includeDailyLogs: false, includeProgress: false, includeTodos: false,
+            includeProjectFinance: false, includeProjectDocuments: false,
+            includeProjectContacts: false, includeProjectDrawings: false,
+            includeWarehouseMovements: false, includeQuickNotes: false,
+            includeOperationAuditLogs: true, operationAuditEntries: [entry]
+        )
+        let scoped = requested.scoped(to: project.id)
+        #expect(!scoped.includeOperationAuditLogs)
+        #expect(scoped.operationAuditEntries.isEmpty)
+        #expect(scoped.selectedModuleCount == 0)
+        let global = requested.scoped(to: nil)
+        #expect(global.includeOperationAuditLogs)
+        #expect(global.operationAuditEntries.map(\.id) == [entry.id])
+        #expect(global.selectedModuleCount == 1)
+        for (options, includesAudit) in [(scoped, false), (global, true)] {
+            let csv = String(decoding: ReportBuilder.makeCSV(snapshot: snapshot, options: options), as: UTF8.self)
+            let html = String(decoding: ReportBuilder.makeHTMLReport(snapshot: snapshot, options: options), as: UTF8.self)
+            let pdf = try #require(PDFDocument(data: ReportBuilder.makePDF(snapshot: snapshot, options: options)))
+            let pdfText = (0..<pdf.pageCount).compactMap { pdf.page(at: $0)?.string }.joined(separator: "\n")
+            for (format, text) in [("CSV", csv), ("HTML", html), ("PDF", pdfText)] {
+                #expect(text.contains("AUDITCANARY") == includesAudit, "\(format): \(text)")
+                #expect(text.contains("PROJECTCANARY") == includesAudit, "\(format): \(text)")
+            }
+        }
+    }
+
+    @Test func globalAuditDateFilterKeepsInclusiveDaysAndNoFilterBehavior() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 8 * 3600))
+        let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 5, day: 1)))
+        let end = try #require(calendar.date(byAdding: .day, value: 1, to: start))
+        let after = try #require(calendar.date(byAdding: .day, value: 1, to: end))
+        let instants = [start.addingTimeInterval(-1), start, end, after.addingTimeInterval(-1), after]
+        let entries = instants.map { date in
+            OperationAuditEntry(id: UUID(), timestamp: date.timeIntervalSince1970,
+                action: .import, outcome: .succeeded, summary: "entry", detail: "", source: "Tests")
+        }
+        #expect(ExportView.auditEntries(entries, enableDateFilter: false, start: start, end: end, calendar: calendar).map(\.id) == entries.map(\.id))
+        #expect(ExportView.auditEntries(entries, enableDateFilter: true, start: end, end: start, calendar: calendar).map(\.id) == Array(entries[1...3]).map(\.id))
+    }
 
     @Test func exportCompletionValidatesWrittenFile() throws {
         let fileURL = FileManager.default.temporaryDirectory

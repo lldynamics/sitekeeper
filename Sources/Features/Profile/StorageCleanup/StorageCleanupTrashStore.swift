@@ -25,6 +25,16 @@ enum StorageCleanupTrashFileKind: String, Codable, Sendable {
     case quickNoteAttachment
     case projectDocument
 
+    func validatedOriginalURL(for fileName: String) throws -> URL {
+        switch self {
+        case .photoOriginal: try PhotoStorage.validatedFileURL(for: fileName)
+        case .photoThumbnail: try PhotoStorage.validatedThumbnailFileURL(for: fileName)
+        case .drawing: try DrawingStorage.validatedFileURL(for: fileName)
+        case .quickNoteAttachment: try QuickNoteAttachmentStorage.validatedFileURL(for: fileName)
+        case .projectDocument: try ProjectDocumentStorage.validatedFileURL(for: fileName)
+        }
+    }
+
     func originalURL(for fileName: String) -> URL {
         switch self {
         case .photoOriginal:
@@ -189,6 +199,8 @@ enum StorageCleanupTrashStore {
         summary: String,
         retentionDays: Int
     ) throws -> StorageCleanupTrashBatch {
+        let sources = trashSources(for: plan)
+        for source in sources { _ = try source.kind.validatedOriginalURL(for: source.fileName) }
         do {
             try RecoverableDeletionStorage.createRootDirectory(named: rootDirectoryName)
         } catch {
@@ -205,7 +217,7 @@ enum StorageCleanupTrashStore {
 
         var movedFiles: [StorageCleanupTrashFile] = []
         do {
-            for source in trashSources(for: plan) {
+            for source in sources {
                 if let file = try moveToTrash(source, batchID: batchID) {
                     movedFiles.append(file)
                 }
@@ -245,6 +257,8 @@ enum StorageCleanupTrashStore {
 
     static func restore(_ batch: StorageCleanupTrashBatch) throws {
         var batches = try loadBatchesForMutation()
+        // An invalid later recovery entry must not partially move earlier files.
+        try validateFiles(in: batch)
         for file in batch.files {
             try restore(file: file, batchID: batch.id)
         }
@@ -254,6 +268,7 @@ enum StorageCleanupTrashStore {
     }
 
     static func permanentlyDelete(_ batch: StorageCleanupTrashBatch) throws {
+        try validateFiles(in: batch)
         var batches = try loadBatchesForMutation()
         do {
             try removeBatchDirectory(batch.id)
@@ -277,6 +292,7 @@ enum StorageCleanupTrashStore {
             now: now,
             expiresAt: \.expiresAt
         ) { batch in
+            try validateFiles(in: batch)
             try removeBatchDirectory(batch.id)
         } onDeleteFailure: { batch, error in
             StorageIssueLog.recordEvent(
@@ -306,6 +322,15 @@ enum StorageCleanupTrashStore {
             )
         }
         return purge.purgedCount
+    }
+
+    private static func validateFiles(in batch: StorageCleanupTrashBatch) throws {
+        for file in batch.files {
+            _ = try file.kind.validatedOriginalURL(for: file.originalFileName)
+            guard trashURL(batchID: batch.id, kind: file.kind, trashedFileName: file.trashedFileName) != nil else {
+                throw StorageCleanupTrashError.restoreFailed(file.originalFileName)
+            }
+        }
     }
 
     private static func saveBatches(_ batches: [StorageCleanupTrashBatch]) throws {

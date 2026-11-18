@@ -18,14 +18,14 @@ extension StorageCleanupTrashStore {
         sources += plan.drawingFileNames.sorted().map { fileName in
             StorageCleanupTrashSource(kind: .drawing, fileName: fileName)
         }
-        return sources
+        return sources.filter { !$0.fileName.isEmpty }
     }
 
     static func moveToTrash(
         _ source: StorageCleanupTrashSource,
         batchID: UUID
     ) throws -> StorageCleanupTrashFile? {
-        let sourceURL = source.kind.originalURL(for: source.fileName)
+        let sourceURL = try source.kind.validatedOriginalURL(for: source.fileName)
         guard FileManager.default.fileExists(atPath: sourceURL.path) else { return nil }
 
         guard let destinationURL = trashURL(
@@ -63,7 +63,7 @@ extension StorageCleanupTrashStore {
             throw StorageCleanupTrashError.rootUnavailable
         }
 
-        let originalURL = file.kind.originalURL(for: file.originalFileName)
+        let originalURL = try file.kind.validatedOriginalURL(for: file.originalFileName)
         let manager = FileManager.default
         guard manager.fileExists(atPath: trashedURL.path) else {
             if manager.fileExists(atPath: originalURL.path) {
@@ -147,6 +147,7 @@ extension StorageCleanupTrashStore {
         guard let recoveryURL = rootURL?
             .appendingPathComponent(batch.id.uuidString, isDirectory: true)
             .appendingPathComponent(recoveryFileName) else { throw StorageCleanupTrashError.rootUnavailable }
+        try AttachmentStoragePath.validateFile(recoveryURL)
         let data = try JSONEncoder().encode(batch)
         try data.write(to: recoveryURL, options: .atomic)
     }
@@ -155,6 +156,7 @@ extension StorageCleanupTrashStore {
         guard let rootURL else { return [] }
         let directories: [URL]
         do {
+            try AttachmentStoragePath.validateDirectory(rootURL)
             directories = try FileManager.default.contentsOfDirectory(
                 at: rootURL,
                 includingPropertiesForKeys: [.isDirectoryKey],
@@ -165,12 +167,17 @@ extension StorageCleanupTrashStore {
         }
 
         return directories.compactMap { directory in
-            guard (try? directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
+            guard UUID(uuidString: directory.lastPathComponent) != nil,
+                  (try? AttachmentStoragePath.validateDirectory(directory)) != nil,
+                  (try? directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
                 return nil
             }
             let recoveryURL = directory.appendingPathComponent(recoveryFileName)
-            guard let data = try? Data(contentsOf: recoveryURL) else { return nil }
-            return try? JSONDecoder().decode(StorageCleanupTrashBatch.self, from: data)
+            guard (try? AttachmentStoragePath.validateFile(recoveryURL)) != nil,
+                  let data = try? Data(contentsOf: recoveryURL),
+                  let batch = try? JSONDecoder().decode(StorageCleanupTrashBatch.self, from: data),
+                  batch.id.uuidString == directory.lastPathComponent else { return nil }
+            return batch
         }
     }
 
@@ -179,16 +186,17 @@ extension StorageCleanupTrashStore {
         kind: StorageCleanupTrashFileKind,
         trashedFileName: String
     ) -> URL? {
-        rootURL?
-            .appendingPathComponent(batchID.uuidString, isDirectory: true)
+        guard let rootURL else { return nil }
+        let directory = rootURL.appendingPathComponent(batchID.uuidString, isDirectory: true)
             .appendingPathComponent(kind.rawValue, isDirectory: true)
-            .appendingPathComponent(trashedFileName)
+        return try? AttachmentStoragePath.fileURL(for: trashedFileName, in: directory)
     }
 
     static func removeBatchDirectory(_ batchID: UUID) throws {
         guard let batchURL = rootURL?.appendingPathComponent(batchID.uuidString, isDirectory: true) else {
             throw StorageCleanupTrashError.rootUnavailable
         }
+        try AttachmentStoragePath.validateDirectory(batchURL)
         guard FileManager.default.fileExists(atPath: batchURL.path) else { return }
         do {
             _ = try FileOps.removeIfExists(

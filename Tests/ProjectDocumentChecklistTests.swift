@@ -5,6 +5,42 @@ import UIKit
 
 @MainActor
 struct ProjectDocumentChecklistTests {
+    @Test func exhaustedDocumentVersionDoesNotMutateTheReplacement() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("document-version-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DataStore(storageDirectory: directory)
+        await store.awaitInitialLoad()
+        let projectID = UUID()
+        let previous = ProjectDocument(projectId: projectID, title: "旧版", fileName: "old.pdf", versionNumber: Int.max)
+        let successor = ProjectDocument(projectId: projectID, title: "新版", fileName: "new.pdf", versionNumber: 1,
+                                        replacesDocumentId: previous.id)
+        store.replaceProjectDocuments([previous, successor])
+
+        #expect(previous.nextEditableVersionNumber == nil)
+        ProjectDetailFinanceDocumentActions.saveDocumentEdit(successor, store: store)
+        #expect(store.projectDocuments.first(where: { $0.id == previous.id })?.versionNumber == Int.max)
+        #expect(store.projectDocuments.first(where: { $0.id == previous.id })?.replacedByDocumentId == nil)
+        #expect(store.projectDocuments.first(where: { $0.id == successor.id })?.versionNumber == 1)
+
+        var valid = previous
+        valid.versionNumber = 998
+        #expect(valid.nextEditableVersionNumber == 999)
+        valid.versionNumber = 999
+        #expect(valid.nextEditableVersionNumber == nil)
+
+        let alreadyLinked = ProjectDocument(projectId: projectID, title: "已有新版", fileName: "existing.pdf",
+                                            versionNumber: 1000, replacesDocumentId: valid.id)
+        store.replaceProjectDocuments([valid, alreadyLinked])
+        var edited = alreadyLinked
+        edited.title = "修改备注前的名称"
+        ProjectDetailFinanceDocumentActions.saveDocumentEdit(edited, store: store)
+        let saved = try #require(store.projectDocuments.first { $0.id == alreadyLinked.id })
+        #expect(saved.title == edited.title)
+        #expect(saved.versionNumber == 1000)
+        #expect(saved.replacesDocumentId == valid.id)
+    }
+
     @Test func projectDocumentRecommendationFollowsProjectStage() throws {
         let referenceDate = try #require(Formatters.date.date(from: "2026-05-17"))
         let futureProject = Project(

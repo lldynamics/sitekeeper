@@ -1,7 +1,7 @@
 import XCTest
 
 @MainActor
-final class RepositoryLaborUITests: XCTestCase {
+final class RepositoryLaborUITests: RepositoryUITestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
     func testPagingEditRestartAndOriginalIsolation() {
@@ -25,7 +25,7 @@ final class RepositoryLaborUITests: XCTestCase {
         app.buttons["repository-labor-unit-filter"].tap()
         app.buttons["天"].tap()
         assertTotal(app, "40.00")
-        attach(app, "candidate-labor-workday-summary")
+        attachScreenshot(app, named: "candidate-labor-workday-summary")
         app.terminate()
         _ = launch(reset: false, app: app)
         openLauncher(app)
@@ -62,7 +62,7 @@ final class RepositoryLaborUITests: XCTestCase {
         search.tap()
         search.typeText("独立人工新增\n")
         assertTotal(app, "0.06")
-        attach(app, "candidate-labor-exact-amount")
+        attachScreenshot(app, named: "candidate-labor-exact-amount")
         search.tap()
         let clear = search.buttons["清除文本"]
         XCTAssertTrue(clear.waitForExistence(timeout: 5))
@@ -86,47 +86,6 @@ final class RepositoryLaborUITests: XCTestCase {
         waitForExpectations(timeout: 10)
     }
 
-    private func focus(_ field: XCUIElement, app: XCUIApplication, acceptsNumberPad: Bool = false) {
-        // The iPad decimal keyboard preview owns accessibility focus and can
-        // intercept the first tap on the next field. Dismiss it explicitly.
-        dismissNumberPad(app)
-        tapAfterScrolling(field, app: app)
-        let focused = NSPredicate { _, _ in
-            field.debugDescription.split(separator: "\n").first?.contains("Keyboard Focused") == true
-                || (acceptsNumberPad && app.popovers.keys["1"].exists)
-        }
-        let ready = XCTNSPredicateExpectation(predicate: focused, object: field)
-        if XCTWaiter.wait(for: [ready], timeout: 3) == .completed { return }
-        field.tap()
-        let retry = XCTNSPredicateExpectation(predicate: focused, object: field)
-        XCTAssertEqual(XCTWaiter.wait(for: [retry], timeout: 3), .completed, "Input did not focus: \(field.identifier)")
-    }
-
-    private func enterNumber(_ value: String, into field: XCUIElement, app: XCUIApplication) {
-        focus(field, app: app, acceptsNumberPad: true)
-        let previous = field.value as? String ?? ""
-        let count = previous == field.placeholderValue ? 0 : previous.count
-        if app.popovers.keys["1"].exists {
-            // Exercise the visible floating keypad rather than requiring a
-            // full keyboard's focus flag from the underlying text field.
-            for _ in 0..<count { app.popovers.keys["Delete"].tap() }
-            for digit in value { app.popovers.keys[String(digit)].tap() }
-        } else {
-            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: count) + value)
-        }
-        let entered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: field)
-        XCTAssertEqual(XCTWaiter.wait(for: [entered], timeout: 5), .completed, "Unexpected input: \(field.identifier)")
-        dismissNumberPad(app)
-    }
-
-    private func dismissNumberPad(_ app: XCUIApplication) {
-        let dismissRegion = app.otherElements["PopoverDismissRegion"]
-        if dismissRegion.exists {
-            dismissRegion.tap()
-            XCTAssertTrue(dismissRegion.waitForNonExistence(timeout: 5))
-        }
-    }
-
     private func finishSearch(_ app: XCUIApplication) {
         let navigation = app.navigationBars["副本人工记录"]
         // Compact search replaces the navigation bar; regular-width search
@@ -139,29 +98,12 @@ final class RepositoryLaborUITests: XCTestCase {
         XCTAssertTrue(navigation.waitForExistence(timeout: 5))
     }
 
-    private func attach(_ app: XCUIApplication, _ name: String) {
-        let image = XCTAttachment(screenshot: app.screenshot())
-        image.name = name
-        image.lifetime = .keepAlways
-        add(image)
-    }
-
     private func launch(reset: Bool, app: XCUIApplication = XCUIApplication()) -> XCUIApplication {
         app.launchArguments = ["-uitest-skip-onboarding", "-languageCode", "zh-Hans", "-AppleLanguages", "(zh-Hans)"]
         app.launchEnvironment = ["UITEST_SKIP_ONBOARDING": "1"]
         if reset { app.launchEnvironment.merge(["UITEST_RESET_STATE": "1", "UITEST_REPOSITORY_FIXTURE": "1", "UITEST_REPOSITORY_LABOR_FIXTURE": "1"]) { _, new in new } }
         app.launch()
         return app
-    }
-
-    private func openLauncher(_ app: XCUIApplication) {
-        let tab = app.tabBars.buttons["我的"]
-        let profile = tab.exists ? tab : app.buttons["primary-module-profile"]
-        XCTAssertTrue(profile.waitForExistence(timeout: 10))
-        profile.tap()
-        tapAfterScrolling(app.buttons["profile-settings-link"], app: app)
-        tapAfterScrolling(app.buttons["repository-workspace-entry"], app: app)
-        XCTAssertTrue(app.buttons["repository-workspace-create"].waitForExistence(timeout: 8))
     }
 
     private func openLabor(_ app: XCUIApplication) {
@@ -171,14 +113,5 @@ final class RepositoryLaborUITests: XCTestCase {
         let entry = app.buttons["repository-labor-entry"]
         tapAfterScrolling(entry, app: app)
         XCTAssertTrue(app.buttons["repository-labor-create"].waitForExistence(timeout: 8))
-    }
-
-    private func tapAfterScrolling(_ element: XCUIElement, app: XCUIApplication) {
-        for _ in 0..<8 {
-            if element.exists && element.isHittable { element.tap()
-            return }
-            app.swipeUp()
-        }
-        XCTFail("Missing entry: \(element)")
     }
 }

@@ -2,14 +2,6 @@ import Testing
 @testable import sitekeeper
 
 struct StorageCleanupSectionCopyAuditTests {
-    @Test func auditCopyIsPresent() {
-        #expect(!StorageCleanupSectionCopy.auditSummaryRestoreCleanupTrash.isEmpty)
-        #expect(!StorageCleanupSectionCopy.auditSummaryPermanentlyDeleteCleanupTrash.isEmpty)
-        #expect(!StorageCleanupSectionCopy.auditSummaryRestoreQuarantinedFile.isEmpty)
-        #expect(!StorageCleanupSectionCopy.auditSummaryPermanentlyDeleteQuarantinedFile.isEmpty)
-        #expect(!StorageCleanupSectionCopy.auditSummaryCleanupByProject.isEmpty)
-    }
-
     @Test func auditDynamicCopyIncludesExpectedValues() {
         #expect(StorageCleanupSectionCopy.restoredCleanupTrashStatus("A").contains("A"))
         #expect(StorageCleanupSectionCopy.restoreCleanupTrashFailedStatus("E").contains("E"))

@@ -21,6 +21,46 @@ struct ReportBuilderTests {
             .joined(separator: "\n")
     }
 
+    @Test func spreadsheetSerializersNeutralizeFormulaPrefixesAndPreserveNumbers() {
+        let prefixes = ["", " ", "\t", "\r\n", "\u{0000}", "\u{200B}", " \t\u{FEFF}"]
+        for prefix in prefixes {
+            for formula in ["=1+1", "+SUM(1,2)", "-1+2", "@SUM(A1:A2)"] {
+                let input = prefix + formula
+                let quoted = "\"'" + input.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+                #expect(ReportBuilder.csv([input]) == quoted)
+                let flattened = input.replacingOccurrences(of: "\r\n", with: " ")
+                    .replacingOccurrences(of: "\r", with: " ")
+                    .replacingOccurrences(of: "\n", with: " ")
+                    .replacingOccurrences(of: "\t", with: " ")
+                #expect(ReportBuilder.tsv([input]) == "'" + flattened)
+            }
+        }
+        #expect(ReportBuilder.csv([-12, -1.25, NumericInputSupport.money("-42.50")]) == "\"-12\",\"-1.25\",\"-42.5\"")
+        for number in ["-42.50", "+12", "-.5", "-1.25e-3", "0", "42"] {
+            #expect(ReportBuilder.csv([number]) == "\"" + number + "\"")
+            #expect(ReportBuilder.tsv([number]) == number)
+        }
+        #expect(ReportBuilder.csv(["中文,\"核实\"\n第二行", ""]) == "\"中文,\"\"核实\"\"\n第二行\",\"\"")
+        #expect(ReportBuilder.tsv(["中文\t核实\r\n第二行", "正常"]) == "中文 核实 第二行\t正常")
+        #expect(ReportBuilder.tsv(["\"=1+1\"", "备注：\"核实\""]) == "\"\"\"=1+1\"\"\"\t\"备注：\"\"核实\"\"\"")
+    }
+
+    @Test func csvReportProtectsContactAndQuickNoteFreeText() {
+        let project = Project(name: "现场", location: "")
+        let snapshot = BackupSnapshot(
+            materialItems: [], quoteItems: [], laborRecords: [], projects: [project],
+            dailyLogs: [], historyRecords: [],
+            projectContacts: [ProjectContact(projectId: project.id, name: "=1+1", company: "+SUM(1,2)", note: "\t@SUM(A1:A2)")],
+            quickNotes: [QuickNote(title: "-1+2", content: " \r\n=2+3", projectId: project.id)], templates: []
+        )
+        let text = String(decoding: ReportBuilder.makeCSV(snapshot: snapshot, options: ExportContentOptions()), as: UTF8.self)
+        #expect(text.contains("\"'=1+1\""))
+        #expect(text.contains("\"'+SUM(1,2)\""))
+        #expect(text.contains("\"'\t@SUM(A1:A2)\""))
+        #expect(text.contains("\"'-1+2\""))
+        #expect(text.contains("\"' \r\n=2+3\""))
+    }
+
     // MARK: - CSV Export
 
     @Test func makeCSVWithAllOptionsProducesData() throws {

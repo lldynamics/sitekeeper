@@ -15,7 +15,7 @@ extension PhotoStorage {
         guard let thumbData = thumb.jpegData(compressionQuality: 0.7) else { return }
         do {
             try ensureDirectoryExists()
-            try thumbData.write(to: thumbnailFileURL(for: fileName), options: .atomic)
+            try thumbData.write(to: validatedThumbnailFileURL(for: fileName), options: .atomic)
             PhotoCache.shared.invalidate(fileName: fileName)
         } catch {
             logIssue("thumbnail_generate_failed", fileName: fileName, error: error)
@@ -26,16 +26,18 @@ extension PhotoStorage {
         let manager = FileManager.default
         var names = Set<String>()
         do {
+            try AttachmentStoragePath.validateDirectory(photoDir)
             let files = try manager.contentsOfDirectory(at: photoDir, includingPropertiesForKeys: nil)
-            names.formUnion(files.map(\.lastPathComponent))
+            names.formUnion(files.filter { (try? AttachmentStoragePath.validateFile($0)) != nil }.map(\.lastPathComponent))
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             // ignore missing directory
         } catch {
             logIssue("directory_list_failed", fileName: photoDir.lastPathComponent, error: error)
         }
         do {
+            try AttachmentStoragePath.validateDirectory(thumbnailDir)
             let files = try manager.contentsOfDirectory(at: thumbnailDir, includingPropertiesForKeys: nil)
-            names.formUnion(files.map(\.lastPathComponent))
+            names.formUnion(files.filter { (try? AttachmentStoragePath.validateFile($0)) != nil }.map(\.lastPathComponent))
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             // ignore missing directory
         } catch {
@@ -47,6 +49,7 @@ extension PhotoStorage {
     static func thumbnailCacheUsageBytes() -> Int {
         let files: [URL]
         do {
+            try AttachmentStoragePath.validateDirectory(thumbnailDir)
             files = try FileManager.default.contentsOfDirectory(
                 at: thumbnailDir,
                 includingPropertiesForKeys: [.fileSizeKey, .totalFileAllocatedSizeKey]
@@ -59,6 +62,7 @@ extension PhotoStorage {
         }
         return files.reduce(0) { total, url in
             do {
+                try AttachmentStoragePath.validateFile(url)
                 let values = try url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
                 return total + (values.fileSize ?? values.totalFileAllocatedSize ?? 0)
             } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
@@ -75,6 +79,7 @@ extension PhotoStorage {
         defer { PhotoCache.shared.clear() }
         let files: [URL]
         do {
+            try AttachmentStoragePath.validateDirectory(thumbnailDir)
             files = try FileManager.default.contentsOfDirectory(at: thumbnailDir, includingPropertiesForKeys: nil)
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return
@@ -84,6 +89,7 @@ extension PhotoStorage {
         }
         for url in files {
             do {
+                try AttachmentStoragePath.validateFile(url)
                 _ = try FileOps.removeIfExists(
                     at: url,
                     context: .init(
@@ -107,10 +113,15 @@ extension PhotoStorage {
     }
 
     static func restoreOrThrow(_ files: [PhotoBackupFile]) throws {
+        let targets = try files.map { file in
+            _ = try validatedThumbnailFileURL(for: file.fileName)
+            return try validatedFileURL(for: file.fileName)
+        }
         try ensureDirectoryExists()
-        for file in files {
+        for (file, target) in zip(files, targets) {
             do {
-                try file.data.write(to: fileURL(for: file.fileName), options: .atomic)
+                try AttachmentStoragePath.validateFile(target)
+                try file.data.write(to: target, options: .atomic)
                 regenerateThumbnail(for: file.fileName)
                 PhotoCache.shared.invalidate(fileName: file.fileName)
             } catch {

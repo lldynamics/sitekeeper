@@ -257,31 +257,10 @@ extension ReportBuilder {
         if missingReceipts.isEmpty {
             pass("missing_receipt", loc("缺票据"), detail: loc("需要留票的账目均已关联票据或资料。"))
         } else {
-            rows += missingReceipts.map { record in
-                let name = [
-                    Formatters.displayDateText(record.date),
-                    record.direction.displayName,
-                    record.category.displayName,
-                    money(record.amount),
-                    record.counterparty
-                ].filter { !$0.isEmpty }.joined(separator: " ")
-                return ProjectPreDeliveryInspectionRow(
-                    checkKey: "missing_receipt",
-                    checkDisplay: loc("缺票据"),
-                    statusRaw: "failed",
-                    statusDisplay: loc("未通过"),
-                    severity: "warning",
-                    objectType: "financial_record",
-                    objectId: record.id.uuidString,
-                    objectName: name,
-                    owner: record.counterparty,
-                    dueDate: record.dueDate,
-                    fileName: "",
-                    detail: locFormat("%@账目需要票据，但未关联票据/资料。", record.category.displayName),
-                    recommendedAction: loc("补拍或导入票据原件，并关联到该账目。")
-                )
-            }
+            rows += projectMissingReceiptInspectionRows(missingReceipts)
         }
+
+        rows += projectRectificationOriginalInspectionRows(todos)
 
         if backupState.isFresh {
             pass(
@@ -337,6 +316,56 @@ extension ReportBuilder {
         return rows
     }
 
+    private static func projectMissingReceiptInspectionRows(
+        _ missingReceipts: [ProjectFinancialRecord]
+    ) -> [ProjectPreDeliveryInspectionRow] {
+        missingReceipts.map { record in
+            let name = [
+                Formatters.displayDateText(record.date),
+                record.direction.displayName,
+                record.category.displayName,
+                money(record.amount),
+                record.counterparty
+            ].filter { !$0.isEmpty }.joined(separator: " ")
+            return ProjectPreDeliveryInspectionRow(
+                checkKey: "missing_receipt",
+                checkDisplay: loc("缺票据"),
+                statusRaw: "failed",
+                statusDisplay: loc("未通过"),
+                severity: "warning",
+                objectType: "financial_record",
+                objectId: record.id.uuidString,
+                objectName: name,
+                owner: record.counterparty,
+                dueDate: record.dueDate,
+                fileName: "",
+                detail: locFormat("%@账目需要票据，但未关联票据/资料。", record.category.displayName),
+                recommendedAction: loc("补拍或导入票据原件，并关联到该账目。")
+            )
+        }
+    }
+
+    private static func projectRectificationOriginalInspectionRows(_ todos: [SiteTodo]) -> [ProjectPreDeliveryInspectionRow] {
+        let references = projectPackageSourceReferences(documents: [], drawings: [], logs: [], quickNotes: [], todos: todos)
+        return references.filter { !$0.exists }.map { reference in
+            ProjectPreDeliveryInspectionRow(
+                checkKey: "missing_rectification_original",
+                checkDisplay: loc("project.deliveryInspection.issue.missingFiles"),
+                statusRaw: "failed",
+                statusDisplay: loc("未通过"),
+                severity: "blocker",
+                objectType: "todo",
+                objectId: reference.issueDetails["todo_id"] ?? "",
+                objectName: reference.missingDescription,
+                owner: "",
+                dueDate: .empty,
+                fileName: reference.fileName,
+                detail: reference.missingDescription,
+                recommendedAction: loc("重新导入")
+            )
+        }
+    }
+
     static func projectPackageMissingReceiptRecords(
         financialRecords: [ProjectFinancialRecord],
         documents: [ProjectDocument]
@@ -353,26 +382,12 @@ extension ReportBuilder {
         documents: [ProjectDocument],
         drawings: [ProjectDrawing],
         logs: [DailyLog],
-        quickNotes: [QuickNote]
+        quickNotes: [QuickNote],
+        todos: [SiteTodo] = []
     ) -> [String] {
-        var entries: [String] = []
-        entries += documents.compactMap { document in
-            ProjectDocumentStorage.exists(fileName: document.fileName) ? nil : locFormat("资料 %@", document.title)
-        }
-        entries += drawings.compactMap { drawing in
-            DrawingStorage.exists(fileName: drawing.fileName) ? nil : locFormat("图纸 %@", drawing.name)
-        }
-        for log in logs {
-            for photo in log.photoAttachments where !PhotoStorage.exists(fileName: photo.fileName) {
-                entries.append(locFormat("照片 %@ %@", log.date.storageText, photo.tag.displayName))
-            }
-        }
-        for note in quickNotes {
-            for attachment in note.attachments where !QuickNoteAttachmentStorage.exists(fileName: attachment.fileName) {
-                entries.append(locFormat("随手记附件 %@", note.title.isEmpty ? note.createdAt.storageText : note.title))
-            }
-        }
-        return entries
+        projectPackageSourceReferences(
+            documents: documents, drawings: drawings, logs: logs, quickNotes: quickNotes, todos: todos
+        ).filter { !$0.exists }.map(\.missingDescription)
     }
 
     static func projectPackageDrawingGroupsWithoutCurrentVersion(_ drawings: [ProjectDrawing]) -> [String] {
@@ -397,23 +412,11 @@ extension ReportBuilder {
     }
 
     static func estimatedProjectPackageStepCount(
-        documents: [ProjectDocument],
-        drawings: [ProjectDrawing],
-        logs: [DailyLog],
-        quickNotes: [QuickNote],
-        contacts: [ProjectContact]
+        sourceReferenceCount: Int,
+        hasQuickNotes: Bool,
+        hasContacts: Bool
     ) -> Int {
-        var total = 8 // PDF + README + delivery checklist + pre-delivery inspection + document/drawing TSV files
-        total += documents.count
-        total += drawings.count
-        total += logs.reduce(0) { $0 + $1.photoAttachments.count }
-        if !quickNotes.isEmpty {
-            total += 1 // quick note summary
-            total += quickNotes.reduce(0) { $0 + $1.attachments.count }
-        }
-        if !contacts.isEmpty {
-            total += 1
-        }
-        return max(total, 1)
+        // PDF, README, checklist, pre-delivery inspection and document/drawing TSVs.
+        8 + sourceReferenceCount + (hasQuickNotes ? 1 : 0) + (hasContacts ? 1 : 0)
     }
 }

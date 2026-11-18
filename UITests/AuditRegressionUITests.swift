@@ -55,7 +55,8 @@ extension SitekeeperUITests {
             skipOnboarding: false,
             resetState: true,
             allowClearWithoutBackup: true,
-            backupRoundTripSlot: slot
+            backupRoundTripSlot: slot,
+            disableAnimations: true
         )
 
         createProjectForBackupRoundTrip(app, named: projectName)

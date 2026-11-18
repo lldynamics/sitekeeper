@@ -132,6 +132,9 @@ shutil.copyfile(root / "Sources/Resources/en.lproj/Localizable.strings", resourc
 for name in ["PracticalFinanceMaterialTests.swift", "PracticalChangeReviewTests.swift", "PracticalIntegrationTests.swift"]:
     shutil.copyfile(root / "Tests" / name, tests / name)
 
+support = root / "Tests/Support/InMemoryBusinessWorkflowStore.swift"
+shutil.copyfile(support, tests / support.name)
+
 # Four exact core cases from the iOS report suite. PDFKit/UIKit rendering cases
 # remain in the native test target and are explicitly excluded from this run.
 path = root / "Tests/PracticalProjectReportTests.swift"

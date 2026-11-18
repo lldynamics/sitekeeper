@@ -1,7 +1,7 @@
 import XCTest
 
 @MainActor
-final class RepositoryContactUITests: XCTestCase {
+final class RepositoryContactUITests: RepositoryUITestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
     func testPagingEditingRestartAndOriginalIsolation() {
@@ -22,7 +22,7 @@ final class RepositoryContactUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["保留主项目及 1 个其他项目关联"].exists)
         app.buttons["repository-editor-save"].tap()
         XCTAssertTrue(app.staticTexts["010-98765432"].waitForExistence(timeout: 8))
-        attach(app, "candidate-contact-edited")
+        attachScreenshot(app, named: "candidate-contact-edited")
         app.terminate()
         _ = launch(reset: false, app: app)
         openLauncher(app)
@@ -60,7 +60,7 @@ final class RepositoryContactUITests: XCTestCase {
         search.typeText("021-12345678\n")
         XCTAssertTrue(app.staticTexts["独立新增联系人"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.staticTexts["独立新增单位"].exists)
-        attach(app, "candidate-contact-search")
+        attachScreenshot(app, named: "candidate-contact-search")
         search.tap()
         search.buttons["清除文本"].tap()
         finishSearch(app)
@@ -88,30 +88,6 @@ final class RepositoryContactUITests: XCTestCase {
         XCTAssertEqual(field.value as? String, value)
     }
 
-    private func focus(_ field: XCUIElement, app: XCUIApplication, acceptsNumberPad: Bool = false) {
-        // The iPad decimal keyboard preview owns accessibility focus and can
-        // intercept the first tap on the next field. Dismiss it explicitly.
-        dismissNumberPad(app)
-        tapAfterScrolling(field, app: app)
-        let focused = NSPredicate { _, _ in
-            field.debugDescription.split(separator: "\n").first?.contains("Keyboard Focused") == true
-                || (acceptsNumberPad && app.popovers.keys["1"].exists)
-        }
-        let ready = XCTNSPredicateExpectation(predicate: focused, object: field)
-        if XCTWaiter.wait(for: [ready], timeout: 3) == .completed { return }
-        field.tap()
-        let retry = XCTNSPredicateExpectation(predicate: focused, object: field)
-        XCTAssertEqual(XCTWaiter.wait(for: [retry], timeout: 3), .completed, "Input did not focus: \(field.identifier)")
-    }
-
-    private func dismissNumberPad(_ app: XCUIApplication) {
-        let dismissRegion = app.otherElements["PopoverDismissRegion"]
-        if dismissRegion.exists {
-            dismissRegion.tap()
-            XCTAssertTrue(dismissRegion.waitForNonExistence(timeout: 5))
-        }
-    }
-
     private func finishSearch(_ app: XCUIApplication) {
         let navigation = app.navigationBars["副本往来单位"]
         // Compact search replaces the navigation bar; regular-width search
@@ -124,29 +100,12 @@ final class RepositoryContactUITests: XCTestCase {
         XCTAssertTrue(navigation.waitForExistence(timeout: 5))
     }
 
-    private func attach(_ app: XCUIApplication, _ name: String) {
-        let image = XCTAttachment(screenshot: app.screenshot())
-        image.name = name
-        image.lifetime = .keepAlways
-        add(image)
-    }
-
     private func launch(reset: Bool, app: XCUIApplication = XCUIApplication()) -> XCUIApplication {
         app.launchArguments = ["-uitest-skip-onboarding", "-languageCode", "zh-Hans", "-AppleLanguages", "(zh-Hans)"]
         app.launchEnvironment = ["UITEST_SKIP_ONBOARDING": "1"]
         if reset { app.launchEnvironment.merge(["UITEST_RESET_STATE": "1", "UITEST_REPOSITORY_FIXTURE": "1", "UITEST_REPOSITORY_CONTACTS_FIXTURE": "1"]) { _, new in new } }
         app.launch()
         return app
-    }
-
-    private func openLauncher(_ app: XCUIApplication) {
-        let tab = app.tabBars.buttons["我的"]
-        let profile = tab.exists ? tab : app.buttons["primary-module-profile"]
-        XCTAssertTrue(profile.waitForExistence(timeout: 10))
-        profile.tap()
-        tapAfterScrolling(app.buttons["profile-settings-link"], app: app)
-        tapAfterScrolling(app.buttons["repository-workspace-entry"], app: app)
-        XCTAssertTrue(app.buttons["repository-workspace-create"].waitForExistence(timeout: 8))
     }
 
     private func openContacts(_ app: XCUIApplication) {
@@ -156,14 +115,5 @@ final class RepositoryContactUITests: XCTestCase {
         let entry = app.buttons["repository-contacts-entry"]
         tapAfterScrolling(entry, app: app)
         XCTAssertTrue(app.buttons["repository-contact-create"].waitForExistence(timeout: 8))
-    }
-
-    private func tapAfterScrolling(_ element: XCUIElement, app: XCUIApplication) {
-        for _ in 0..<8 {
-            if element.exists && element.isHittable { element.tap()
-            return }
-            app.swipeUp()
-        }
-        XCTFail("Missing entry: \(element)")
     }
 }

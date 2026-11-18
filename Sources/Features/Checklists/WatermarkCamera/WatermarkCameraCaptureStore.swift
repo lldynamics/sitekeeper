@@ -25,14 +25,7 @@ final class WatermarkCameraCaptureStore {
 
     var draftDirectory: URL { storage.directory }
 
-    var hasMultiplePhotos: Bool { photos.count > 1 }
     var hasPendingDrafts: Bool { photos.contains { !$0.isPersisted } || !pendingStatusIDs.isEmpty }
-
-    var selectedPhotoNumber: Int {
-        guard let id = selectedPhoto?.id,
-              let index = photos.firstIndex(where: { $0.id == id }) else { return 1 }
-        return index + 1
-    }
 
     func restore() async {
         await beginOperation()
@@ -146,7 +139,7 @@ final class WatermarkCameraCaptureStore {
         } catch { reportErrors([String(format: AppLocalization.string("照片操作状态未能保存：%@"), error.localizedDescription)]) }
     }
 
-    func saveToAlbum(photo: WatermarkCapturedPhoto, quality: WatermarkExportQuality, coordinator: WatermarkCameraExportCoordinator) async -> WatermarkCameraAlbumSaveResult {
+    func saveToAlbum(photo: WatermarkCapturedPhoto, quality: WatermarkExportQuality) async -> WatermarkCameraAlbumSaveResult {
         await beginOperation()
         defer { endOperation() }
         guard var current = photos.first(where: { $0.id == photo.id }) else {
@@ -160,7 +153,7 @@ final class WatermarkCameraCaptureStore {
                 return .error(message: AppLocalization.string("请先将照片保存到草稿，再保存到相册。"))
             }
         }
-        let outcome = await coordinator.savePhotoToAlbum(current, storage: storage, quality: quality)
+        let outcome = await WatermarkCameraExportCoordinator.savePhotoToAlbum(current, storage: storage, quality: quality)
         current = outcome.photo
         if let index = photos.firstIndex(where: { $0.id == current.id }) { photos[index] = current }
         if outcome.requiresStatusRetry {
@@ -189,7 +182,8 @@ final class WatermarkCameraCaptureStore {
                 merged.archiveFailure = pending.archiveFailure
             }
             merged.albumAssetIdentifier = fresh.albumAssetIdentifier ?? pending.albumAssetIdentifier
-            if merged.albumStatus == .completed { merged.albumAttemptID = nil; merged.albumFailure = nil }
+            if merged.albumStatus == .completed { merged.albumAttemptID = nil
+            merged.albumFailure = nil }
             if merged.archiveStatus == .completed { merged.archiveFailure = nil }
             return merged
         }

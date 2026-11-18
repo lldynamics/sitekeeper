@@ -71,22 +71,6 @@ enum WatermarkPhotoAlbumWriter {
             AppLocalization.string("wm_camera_unknown_error")
         }
     }
-
-    static func write(_ images: [UIImage]) async throws {
-        try await withCheckedThrowingContinuation { continuation in
-            PHPhotoLibrary.shared().performChanges {
-                for image in images {
-                    PHAssetChangeRequest.creationRequestForAsset(from: image)
-                }
-            } completionHandler: { success, error in
-                if success {
-                    continuation.resume()
-                } else {
-                    continuation.resume(throwing: error ?? WriteError())
-                }
-            }
-        }
-    }
 }
 
 enum WatermarkCameraTextBuilder {
@@ -117,57 +101,10 @@ enum WatermarkCameraTextBuilder {
         return String(format: AppLocalization.string("wm_camera_log_draft_with_tag_format"), trimmedTag)
     }
 
-    static func photoNote(
-        capturedAt: Date,
-        photographer: String,
-        locationText: String,
-        tag: String
-    ) -> String {
-        [
-            AppLocalization.string("wm_camera_photo_note_source"),
-            String(
-                format: AppLocalization.string("wm_camera_photo_note_capture_time_format"),
-                Formatters.dateTime.string(from: capturedAt)
-            ),
-            photographer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? nil
-            : String(format: AppLocalization.string("wm_camera_photo_note_photographer_format"), photographer),
-            locationText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? nil
-            : String(format: AppLocalization.string("wm_camera_photo_note_location_format"), locationText),
-            tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? nil
-            : String(format: AppLocalization.string("wm_camera_photo_note_tag_format"), tag)
-        ].compactMap { $0 }.joined(separator: "\n")
-    }
-
     private static func compactTimestamp(from date: Date = Date()) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "yyyyMMdd_HHmmss"
         return formatter.string(from: date)
-    }
-}
-
-enum WatermarkCameraProjectDocumentWriter {
-    @MainActor
-    static func attach(
-        photo: WatermarkCapturedPhoto,
-        projectId: UUID,
-        note: String,
-        store: DataStore
-    ) -> String? {
-        ProjectDetailFinanceDocumentActions.importCapturedImage(
-            photo.image,
-            title: String(
-                format: AppLocalization.string("wm_camera_project_document_title_format"),
-                Formatters.dateTime.string(from: photo.capturedAt)
-            ),
-            createdAt: Formatters.timestamp(photo.capturedAt),
-            category: .constructionRecord,
-            note: note,
-            projectId: projectId,
-            store: store
-        )
     }
 }

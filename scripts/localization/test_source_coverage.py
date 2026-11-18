@@ -22,8 +22,26 @@ String(localized: "dynamic \(name)")'''
     def test_app_localization_helper_is_covered(self):
         source = '\n'.join(['AppLocalization.string("项目")',
                              'AppLocalization.string(\n    "Save")',
+                             'calculatorLoc("墙体面积")',
+                             'calculatorLocFormat("总长 %@", length)',
+                             'ReportBuilder.loc("报表标题")',
+                             'loc("材料清单")',
+                             'locFormat("共 %lld 项", count)',
+                             'widgetText("widget_label_todo")',
+                             'widgetLocalizedCount("widget_low_stock_count_format", 2)',
+                             'other.loc("ignored_member")',
                              '// AppLocalization.string("ignored")'])
-        self.assertEqual(list(requested_keys(source)), [('项目', 1), ('Save', 2)])
+        self.assertEqual(list(requested_keys(source)), [
+            ('项目', 1),
+            ('Save', 2),
+            ('墙体面积', 4),
+            ('总长 %@', 5),
+            ('报表标题', 6),
+            ('材料清单', 7),
+            ('共 %lld 项', 8),
+            ('widget_label_todo', 9),
+            ('widget_low_stock_count_format', 10),
+        ])
 
     def test_duplicate_resources_fail(self):
         with self.assertRaises(ValueError):

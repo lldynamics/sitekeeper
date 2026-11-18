@@ -155,9 +155,20 @@ enum ReportBuilder {
 
     static func csv(_ values: [any CustomStringConvertible]) -> String {
         values.map { value in
-            let escaped = value.description.replacingOccurrences(of: "\"", with: "\"\"")
+            let escaped = spreadsheetText(value.description).replacingOccurrences(of: "\"", with: "\"\"")
             return "\"\(escaped)\""
         }.joined(separator: ",")
+    }
+
+    /// CSV quoting alone does not stop spreadsheet formula evaluation. Preserve plain
+    /// numbers (including negative amount_raw values), and force formula-like text to text.
+    static func spreadsheetText(_ raw: String) -> String {
+        let ignoredPrefix = CharacterSet.whitespacesAndNewlines.union(.controlCharacters)
+        let significant = raw.unicodeScalars.drop(while: { ignoredPrefix.contains($0) })
+        guard let first = significant.first, "=+-@".unicodeScalars.contains(first) else { return raw }
+        let numberPattern = #"\A[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\z"#
+        if raw.range(of: numberPattern, options: .regularExpression) != nil { return raw }
+        return "'" + raw
     }
 
     static func escapeHTML(_ text: String) -> String {

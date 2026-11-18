@@ -45,22 +45,6 @@ enum PhotoStorage {
         baseDirectory.appendingPathComponent("PhotoThumbnails")
     }
 
-    /// 保存原图 + 缩略图，返回文件名
-    static func save(original: Data, logId: UUID, index: Int = 0) -> String? {
-        let suffix = index == 0 ? "" : "-\(index)"
-        return save(original: original, fileName: "\(logId.uuidString)\(suffix).jpg")
-    }
-
-    /// 兼容旧调用：新写入流程应优先使用 `saveOrThrow`，让界面能提示失败原因。
-    static func save(original: Data, fileName: String) -> String? {
-        do {
-            return try saveOrThrow(original: original, fileName: fileName)
-        } catch {
-            logIssue("save_failed", fileName: fileName, error: error)
-            return nil
-        }
-    }
-
     static func saveOrThrow(original: Data, logId: UUID, index: Int = 0) throws -> String {
         let suffix = index == 0 ? "" : "-\(index)"
         return try saveOrThrow(original: original, fileName: "\(logId.uuidString)\(suffix).jpg")
@@ -107,7 +91,15 @@ enum PhotoStorage {
 
     /// 原始照片文件 URL（供备份、交付包和文件浏览使用）。
     static func fileURL(for fileName: String) -> URL {
-        photoDir.appendingPathComponent(fileName)
+        (try? validatedFileURL(for: fileName)) ?? AttachmentStoragePath.unavailableURL
+    }
+
+    static func validatedFileURL(for fileName: String) throws -> URL {
+        try AttachmentStoragePath.fileURL(for: fileName, in: photoDir)
+    }
+
+    static func validatedThumbnailFileURL(for fileName: String) throws -> URL {
+        try AttachmentStoragePath.fileURL(for: fileName, in: thumbnailDir)
     }
 
     /// 缩略图文件 URL（供清理回收站成对隔离/恢复）。
@@ -130,8 +122,8 @@ enum PhotoStorage {
         defer { PhotoCache.shared.invalidate(fileName: fileName) }
         let manager = FileManager.default
         let targets: [(url: URL, category: FileQuarantineCategory)] = [
-            (fileURL(for: fileName), .photoOriginal),
-            (thumbnailFileURL(for: fileName), .photoThumbnail)
+            (try validatedFileURL(for: fileName), .photoOriginal),
+            (try validatedThumbnailFileURL(for: fileName), .photoThumbnail)
         ]
         var quarantinedAnyFile = false
         var quarantinedEntries: [FileQuarantineEntry] = []
@@ -179,7 +171,7 @@ enum PhotoStorage {
 
     static func data(for fileName: String) -> Data? {
         do {
-            return try Data(contentsOf: fileURL(for: fileName))
+            return try Data(contentsOf: validatedFileURL(for: fileName))
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return nil
         } catch {
@@ -189,7 +181,6 @@ enum PhotoStorage {
     }
 
     static func dataAsync(for fileName: String) async -> Data? {
-        let url = fileURL(for: fileName)
         do {
             return try await FileIOTaskRunner.run(
                 priority: .utility,
@@ -201,7 +192,7 @@ enum PhotoStorage {
                 )
             ) {
                 do {
-                    let data = try Data(contentsOf: url, options: .mappedIfSafe)
+                    let data = try Data(contentsOf: validatedFileURL(for: fileName), options: .mappedIfSafe)
                     guard !Task.isCancelled else { return nil }
                     return data
                 } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
@@ -214,12 +205,13 @@ enum PhotoStorage {
     }
 
     static func exists(fileName: String) -> Bool {
-        FileManager.default.fileExists(atPath: fileURL(for: fileName).path)
+        guard let url = try? validatedFileURL(for: fileName) else { return false }
+        return FileManager.default.fileExists(atPath: url.path)
     }
 
     static func fileSize(for fileName: String) -> Int {
-        let url = fileURL(for: fileName)
         do {
+            let url = try validatedFileURL(for: fileName)
             let values = try url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
             return values.fileSize ?? values.totalFileAllocatedSize ?? 0
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
@@ -244,6 +236,8 @@ enum PhotoStorage {
 
     static func ensureDirectoryExists() throws {
         do {
+            try AttachmentStoragePath.validateDirectory(photoDir)
+            try AttachmentStoragePath.validateDirectory(thumbnailDir)
             try FileManager.default.createDirectory(at: photoDir, withIntermediateDirectories: true)
             try FileManager.default.createDirectory(at: thumbnailDir, withIntermediateDirectories: true)
         } catch {
@@ -252,7 +246,7 @@ enum PhotoStorage {
     }
 
     static func thumbnailFileURL(for fileName: String) -> URL {
-        thumbnailDir.appendingPathComponent(fileName)
+        (try? validatedThumbnailFileURL(for: fileName)) ?? AttachmentStoragePath.unavailableURL
     }
 
     private static func latestQuarantineEntry(

@@ -70,10 +70,6 @@ enum ProjectFinancialCategory: String, CaseIterable, Codable, Sendable {
         direction.supports(category) ? category : direction.defaultCategory
     }
 
-    static func normalized(rawValue: String, for direction: ProjectFinancialDirection) -> ProjectFinancialCategory {
-        normalized(StringEnumFallback.value(rawValue, default: direction.defaultCategory), for: direction)
-    }
-
     var requiresAttachment: Bool {
         switch self {
         case .material, .labor, .reimbursement, .invoice, .receipt:

@@ -9,11 +9,13 @@ extension BackupArchiveService {
         from snapshot: BackupSnapshot,
         progress: ((BackupArchiveProgress) -> Void)?,
         shouldCancel: (() -> Bool)?,
-        temporaryFilePrefix: String = "backup-archive"
+        temporaryFilePrefix: String = "backup-archive",
+        cloudBackupScope: CloudBackupScope? = nil
     ) throws -> BackupArchive {
+        try snapshot.validateAttachmentReferences()
         let metadataSnapshot = snapshot.withoutEmbeddedFiles()
         let metadata = try encodeMetadata(metadataSnapshot)
-        let manifest = try encodeManifest(from: metadataSnapshot)
+        let manifest = try encodeManifest(from: metadataSnapshot, cloudBackupScope: cloudBackupScope)
         let archiveURL = StreamingZipArchiveWriter.makeTemporaryFileURL(prefix: temporaryFilePrefix)
         var zip = try StreamingZipArchiveWriter(fileURL: archiveURL, limits: .backup)
         var writerFinished = false
@@ -182,12 +184,32 @@ extension BackupArchiveService {
         shouldCancel: () throws -> Void,
         onStep: (String) -> Void
     ) throws {
-        var seen = Set<String>()
-        for fileName in paths where !fileName.isEmpty && !seen.contains(fileName) {
+        for group in attachmentNameGroups(paths) {
             try shouldCancel()
-            seen.insert(fileName)
-            let sourceURL = fileURLProvider(fileName)
-            guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+            var selected: (name: String, url: URL)?
+            for fileName in group {
+                try AttachmentStoragePath.validateLeaf(fileName)
+                let sourceURL = fileURLProvider(fileName)
+                try AttachmentStoragePath.validateFile(sourceURL)
+                guard FileManager.default.fileExists(atPath: sourceURL.path) else { continue }
+                if let selected {
+                    let first = try FileManager.default.attributesOfItem(atPath: selected.url.path)
+                    let next = try FileManager.default.attributesOfItem(atPath: sourceURL.path)
+                    guard let firstDevice = first[.systemNumber] as? NSNumber,
+                          let firstInode = first[.systemFileNumber] as? NSNumber,
+                          let nextDevice = next[.systemNumber] as? NSNumber,
+                          let nextInode = next[.systemFileNumber] as? NSNumber,
+                          firstDevice == nextDevice, firstInode == nextInode else {
+                        // A case-sensitive volume can contain distinct originals with
+                        // aliasing names; never silently discard one of them.
+                        throw FileStorageError.unsafeAttachmentPath(fileName)
+                    }
+                } else {
+                    selected = (fileName, sourceURL)
+                }
+            }
+            guard let selected else {
+                let fileName = group[0]
                 missingFiles.append("\(displayName) \(fileName)")
                 recordBackupArchiveIssue(
                     "backup.archive.source_file_missing",
@@ -197,6 +219,7 @@ extension BackupArchiveService {
                 onStep(locFormat("检查%@ %@", displayName, fileName))
                 continue
             }
+            let (fileName, sourceURL) = selected
 
             do {
                 try zip.addFile(path: prefix + fileName, sourceFileURL: sourceURL)
@@ -226,10 +249,9 @@ extension BackupArchiveService {
         missingFiles: inout [String],
         rawFilesBytes: inout Int
     ) {
-        var seen = Set<String>()
-        for fileName in paths where !fileName.isEmpty && !seen.contains(fileName) {
-            seen.insert(fileName)
-            guard exists(fileName) else {
+        for group in attachmentNameGroups(paths) {
+            guard let fileName = group.first(where: exists) else {
+                let fileName = group[0]
                 missingFiles.append("\(displayName) \(fileName)")
                 recordBackupArchiveIssue(
                     "backup.archive.estimate_source_file_missing",
@@ -258,7 +280,24 @@ extension BackupArchiveService {
     }
 
     static func uniqueFileCount(_ paths: [String]) -> Int {
-        Set(paths.filter { !$0.isEmpty }).count
+        attachmentNameGroups(paths).count
+    }
+
+    private static func attachmentNameGroups(_ paths: [String]) -> [[String]] {
+        var groups: [[String]] = []
+        var indices: [String: Int] = [:]
+        for name in paths where !name.isEmpty {
+            let key = AttachmentStoragePath.comparisonKey(name)
+            if let index = indices[key] {
+                if !groups[index].contains(where: { $0.utf8.elementsEqual(name.utf8) }) {
+                    groups[index].append(name)
+                }
+            } else {
+                indices[key] = groups.count
+                groups.append([name])
+            }
+        }
+        return groups
     }
 
     static func quickNoteAttachmentNames(from snapshot: BackupSnapshot) -> [String] {

@@ -1,7 +1,7 @@
 import XCTest
 
 @MainActor
-final class RepositoryFinancialUITests: XCTestCase {
+final class RepositoryFinancialUITests: RepositoryUITestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
     func testFinancialPagingStatusEditRestartAndOriginalIsolation() {
@@ -101,16 +101,6 @@ final class RepositoryFinancialUITests: XCTestCase {
         return app
     }
 
-    private func openLauncher(_ app: XCUIApplication) {
-        let tab = app.tabBars.buttons["我的"]
-        let profile = tab.exists ? tab : app.buttons["primary-module-profile"]
-        XCTAssertTrue(profile.waitForExistence(timeout: 10))
-        profile.tap()
-        tapAfterScrolling(app.buttons["profile-settings-link"], app: app)
-        tapAfterScrolling(app.buttons["repository-workspace-entry"], app: app)
-        XCTAssertTrue(app.buttons["repository-workspace-create"].waitForExistence(timeout: 8))
-    }
-
     private func openFinance(_ app: XCUIApplication) {
         let project = app.staticTexts["分页工程 052"]
         XCTAssertTrue(project.waitForExistence(timeout: 30))
@@ -119,14 +109,5 @@ final class RepositoryFinancialUITests: XCTestCase {
         XCTAssertTrue(entry.waitForExistence(timeout: 8))
         entry.tap()
         XCTAssertTrue(app.buttons["repository-finance-create"].waitForExistence(timeout: 8))
-    }
-
-    private func tapAfterScrolling(_ element: XCUIElement, app: XCUIApplication) {
-        for _ in 0..<8 {
-            if element.exists && element.isHittable { element.tap()
-            return }
-            app.swipeUp()
-        }
-        XCTFail("Missing entry: \(element)")
     }
 }

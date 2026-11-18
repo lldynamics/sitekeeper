@@ -102,13 +102,4 @@ struct ProjectFileItem: Identifiable, Sendable {
 enum ProjectFileThumbnailToken: Hashable, Sendable {
     case photo(fileName: String)
     case quickNote(kind: QuickNoteAttachmentKind, fileName: String)
-
-    var cacheKey: String {
-        switch self {
-        case .photo(let fileName):
-            return "photo:\(fileName)"
-        case .quickNote(let kind, let fileName):
-            return "quick:\(kind.rawValue):\(fileName)"
-        }
-    }
 }

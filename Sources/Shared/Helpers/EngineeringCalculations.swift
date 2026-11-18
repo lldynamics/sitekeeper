@@ -281,15 +281,6 @@ extension EngineeringCalculations {
             }
     }
 
-    static func trayFillRate(width: Double, height: Double, cableArea: Double) -> Double {
-        switch trayFillRateValidated(width: width, height: height, cableArea: cableArea) {
-        case .success(let rate):
-            return rate
-        case .failure:
-            return 0
-        }
-    }
-
     static func recommendedTraySize(cableArea: Double, maxFill: Double = 0.4) -> (width: Double, height: Double)? {
         guard cableArea.isFinite, cableArea > 0, cableArea <= Limits.cableAreaMax,
               maxFill.isFinite, maxFill > 0, maxFill <= 1 else {

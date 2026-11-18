@@ -45,7 +45,8 @@ enum WatermarkCameraBatchService {
                 autoreleasepool {
                     let image: UIImage
                     do { image = try photo.imageForDelivery() }
-                    catch { renderingError = error; return }
+                    catch { renderingError = error
+                    return }
                     context.beginPage()
                     let title = photo.context.projectName ?? AppLocalization.string("未指定项目")
                     (title as NSString).draw(in: CGRect(x: 28, y: 24, width: 539, height: 42), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 17)])

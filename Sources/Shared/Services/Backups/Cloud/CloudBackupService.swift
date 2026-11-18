@@ -7,6 +7,7 @@ struct CloudBackupFile: Identifiable, Equatable {
     let byteSize: Int
     let modifiedAt: Date
     var uploadState: CloudBackupUploadState = .pending
+    var scope: CloudBackupScope?
 
     var formattedSize: String {
         QuickNoteAttachmentStorage.formattedFileSize(byteSize)
@@ -66,43 +67,56 @@ enum CloudBackupService {
         FileManager.default.url(forUbiquityContainerIdentifier: containerIdentifier)
     }
 
-    static func makeBackupFileName(date: Date = Date()) -> String {
+    static func makeBackupFileName(date: Date = Date(), scope: CloudBackupScope? = nil) -> String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return "\(backupFilePrefix)-\(formatter.string(from: date))-\(UUID().uuidString).\(backupFileExtension)"
+        let scopeComponent = scope.map { "-\($0.rawValue)" } ?? ""
+        return "\(backupFilePrefix)-\(formatter.string(from: date))\(scopeComponent)-\(UUID().uuidString).\(backupFileExtension)"
     }
 
-    static func latestBackup() throws -> CloudBackupFile? {
-        try listBackups().first
+    /// Scope is also recorded in the ZIP manifest. Reading the generated name
+    /// lets other devices list and retain cloud placeholders without downloading them.
+    static func scope(forBackupFileName name: String) -> CloudBackupScope? {
+        let prefix = backupFilePrefix + "-"
+        let suffix = "." + backupFileExtension
+        guard name.hasPrefix(prefix), name.hasSuffix(suffix) else { return nil }
+        let stem = name.dropFirst(prefix.count).dropLast(suffix.count)
+        let uuidLength = 36
+        guard UUID(uuidString: String(stem.suffix(uuidLength))) != nil,
+              stem.dropLast(uuidLength).last == "-" else { return nil }
+        let components = stem.dropLast(uuidLength + 1).split(separator: "-", omittingEmptySubsequences: false)
+        guard components.count == 3, components[0].count == 8, components[1].count == 6,
+              components[0].allSatisfy(\.isNumber), components[1].allSatisfy(\.isNumber) else { return nil }
+        return CloudBackupScope(rawValue: String(components[2]))
     }
 
     static func listBackups() throws -> [CloudBackupFile] {
         let directory = try backupsDirectoryURL(createIfNeeded: true)
-        let urls = try FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        )
+        return try coordinatedRead(at: directory) { coordinatedDirectory in
+            let urls = try FileManager.default.contentsOfDirectory(
+                at: coordinatedDirectory,
+                includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            )
 
-        return urls
-            .filter { $0.pathExtension.lowercased() == backupFileExtension }
-            .compactMap(cloudBackupFile(from:))
-            .sorted { lhs, rhs in
-                if lhs.modifiedAt == rhs.modifiedAt {
-                    return lhs.fileName > rhs.fileName
+            return urls
+                .filter { $0.pathExtension.lowercased() == backupFileExtension }
+                .compactMap(cloudBackupFile(from:))
+                .sorted { lhs, rhs in
+                    if lhs.modifiedAt == rhs.modifiedAt {
+                        return lhs.fileName > rhs.fileName
+                    }
+                    return lhs.modifiedAt > rhs.modifiedAt
                 }
-                return lhs.modifiedAt > rhs.modifiedAt
-            }
+        }
     }
 
-    static func saveArchiveToCloud(
-        archiveFileURL: URL,
-        fileName: String = makeBackupFileName()
-    ) throws -> CloudBackupFile {
+    static func saveArchiveToCloud(archiveFileURL: URL) throws -> CloudBackupFile {
+        let manifest: BackupArchiveManifest
         do {
-            try BackupArchiveSecurity.validateRemoteCopy(at: archiveFileURL, expectedSHA256: nil)
+            manifest = try BackupArchiveService.validateArchive(at: archiveFileURL)
         } catch {
             recordIssue("cloud_backup.source_validation_failed", fileURL: archiveFileURL, error: error)
             throw CloudBackupError.invalidBackupFile
@@ -115,53 +129,63 @@ enum CloudBackupService {
             throw CloudBackupError.invalidBackupFile
         }
         let directory = try backupsDirectoryURL(createIfNeeded: true)
-        let targetURL = directory.appendingPathComponent(fileName)
+        let targetURL = directory.appendingPathComponent(makeBackupFileName(scope: manifest.scope))
         let digestURL = integritySidecarURL(for: targetURL)
-        try FileOps.replaceByCopyWithRollback(
-            from: archiveFileURL,
-            to: targetURL,
-            context: .init(
-                event: "cloud_backup.save_archive",
-                category: .cloudBackup,
-                source: "CloudBackupService.saveArchiveToCloud"
+        return try coordinatedWritePair(
+            firstURL: targetURL,
+            firstOptions: .forReplacing,
+            secondURL: digestURL,
+            secondOptions: .forReplacing
+        ) { coordinatedTargetURL, coordinatedDigestURL in
+            try FileOps.replaceByCopyWithRollback(
+                from: archiveFileURL,
+                to: coordinatedTargetURL,
+                context: .init(
+                    event: "cloud_backup.save_archive",
+                    category: .cloudBackup,
+                    source: "CloudBackupService.saveArchiveToCloud"
+                )
             )
-        )
-        do {
-            try BackupArchiveSecurity.validateRemoteCopy(at: targetURL, expectedSHA256: digest)
-            try Data("\(digest)\n".utf8).write(to: digestURL, options: .atomic)
-            BackupArchiveSecurity.applyDataProtection(to: targetURL)
-            BackupArchiveSecurity.applyDataProtection(to: digestURL)
-        } catch {
-            try? FileManager.default.removeItem(at: targetURL)
-            try? FileManager.default.removeItem(at: digestURL)
-            recordIssue("cloud_backup.upload_validation_failed", fileURL: targetURL, error: error)
-            throw CloudBackupError.invalidBackupFile
+            do {
+                guard try BackupArchiveSecurity.sha256Hex(of: coordinatedTargetURL) == digest else {
+                    throw BackupArchiveSecurityError.digestMismatch
+                }
+                try Data("\(digest)\n".utf8).write(to: coordinatedDigestURL, options: .atomic)
+                BackupArchiveSecurity.applyDataProtection(to: coordinatedTargetURL)
+                BackupArchiveSecurity.applyDataProtection(to: coordinatedDigestURL)
+            } catch {
+                try? FileManager.default.removeItem(at: coordinatedTargetURL)
+                try? FileManager.default.removeItem(at: coordinatedDigestURL)
+                recordIssue("cloud_backup.upload_validation_failed", fileURL: coordinatedTargetURL, error: error)
+                throw CloudBackupError.invalidBackupFile
+            }
+            guard let file = cloudBackupFile(from: coordinatedTargetURL) else {
+                throw CloudBackupError.invalidBackupFile
+            }
+            return file
         }
-        guard let file = cloudBackupFile(from: targetURL) else {
-            throw CloudBackupError.invalidBackupFile
-        }
-        return file
     }
 
     static func copyBackupToTemporaryFile(_ file: CloudBackupFile) throws -> URL {
         try ensureCloudFileIsReady(file.fileURL)
-        guard FileManager.default.fileExists(atPath: file.fileURL.path) else {
-            throw CloudBackupError.backupNotFound
-        }
-
         let targetURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("icloud-backup-import-\(UUID().uuidString).zip")
-        try FileOps.replaceByCopyWithRollback(
-            from: file.fileURL,
-            to: targetURL,
-            context: .init(
-                event: "cloud_backup.copy_to_temporary",
-                category: .cloudBackup,
-                source: "CloudBackupService.copyBackupToTemporaryFile"
+        let expectedDigest: String? = try coordinatedRead(at: file.fileURL) { coordinatedSourceURL in
+            guard FileManager.default.fileExists(atPath: coordinatedSourceURL.path) else {
+                throw CloudBackupError.backupNotFound
+            }
+            try FileOps.replaceByCopyWithRollback(
+                from: coordinatedSourceURL,
+                to: targetURL,
+                context: .init(
+                    event: "cloud_backup.copy_to_temporary",
+                    category: .cloudBackup,
+                    source: "CloudBackupService.copyBackupToTemporaryFile"
+                )
             )
-        )
+            return try readIntegrityDigest(for: coordinatedSourceURL)
+        }
         do {
-            let expectedDigest = try readIntegrityDigest(for: file.fileURL)
             try BackupArchiveSecurity.validateRemoteCopy(at: targetURL, expectedSHA256: expectedDigest)
             BackupArchiveSecurity.applyDataProtection(to: targetURL)
             return targetURL
@@ -200,22 +224,29 @@ enum CloudBackupService {
         let removable = CloudBackupRetentionPolicy.removableBackups(backups, keeping: retainedCount)
         for file in removable {
             do {
-                _ = try FileOps.removeIfExists(
-                    at: file.fileURL,
-                    context: .init(
-                        event: "cloud_backup.retention_prune",
-                        category: .cloudBackup,
-                        source: "CloudBackupService.pruneOldBackups"
+                try coordinatedWritePair(
+                    firstURL: file.fileURL,
+                    firstOptions: .forDeleting,
+                    secondURL: integritySidecarURL(for: file.fileURL),
+                    secondOptions: .forDeleting
+                ) { coordinatedArchiveURL, coordinatedSidecarURL in
+                    _ = try FileOps.removeIfExists(
+                        at: coordinatedArchiveURL,
+                        context: .init(
+                            event: "cloud_backup.retention_prune",
+                            category: .cloudBackup,
+                            source: "CloudBackupService.pruneOldBackups"
+                        )
                     )
-                )
-                _ = try FileOps.removeIfExists(
-                    at: integritySidecarURL(for: file.fileURL),
-                    context: .init(
-                        event: "cloud_backup.retention_prune_digest",
-                        category: .cloudBackup,
-                        source: "CloudBackupService.pruneOldBackups"
+                    _ = try FileOps.removeIfExists(
+                        at: coordinatedSidecarURL,
+                        context: .init(
+                            event: "cloud_backup.retention_prune_digest",
+                            category: .cloudBackup,
+                            source: "CloudBackupService.pruneOldBackups"
+                        )
                     )
-                )
+                }
             } catch {
                 recordIssue(
                     "cloud_backup.retention_prune_failed",
@@ -226,6 +257,40 @@ enum CloudBackupService {
             }
         }
         return removable.isEmpty ? backups : try listBackups()
+    }
+
+    private static func coordinatedRead<T>(at url: URL, _ body: (URL) throws -> T) throws -> T {
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var coordinatorError: NSError?
+        var bodyResult: Result<T, any Error>?
+        coordinator.coordinate(readingItemAt: url, options: [], error: &coordinatorError) { coordinatedURL in
+            bodyResult = Result { try body(coordinatedURL) }
+        }
+        if let bodyResult { return try bodyResult.get() }
+        throw coordinatorError ?? CloudBackupError.iCloudUnavailable
+    }
+
+    private static func coordinatedWritePair<T>(
+        firstURL: URL,
+        firstOptions: NSFileCoordinator.WritingOptions,
+        secondURL: URL,
+        secondOptions: NSFileCoordinator.WritingOptions,
+        _ body: (URL, URL) throws -> T
+    ) throws -> T {
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var coordinatorError: NSError?
+        var bodyResult: Result<T, any Error>?
+        coordinator.coordinate(
+            writingItemAt: firstURL,
+            options: firstOptions,
+            writingItemAt: secondURL,
+            options: secondOptions,
+            error: &coordinatorError
+        ) { url1, url2 in
+            bodyResult = Result { try body(url1, url2) }
+        }
+        if let bodyResult { return try bodyResult.get() }
+        throw coordinatorError ?? CloudBackupError.iCloudUnavailable
     }
 
     private static func cloudBackupFile(from url: URL) -> CloudBackupFile? {
@@ -245,7 +310,8 @@ enum CloudBackupService {
             fileName: url.lastPathComponent,
             byteSize: values.fileSize ?? QuickNoteAttachmentStorage.fileSize(at: url),
             modifiedAt: values.contentModificationDate ?? Date.distantPast,
-            uploadState: uploadState(for: url)
+            uploadState: uploadState(for: url),
+            scope: scope(forBackupFileName: url.lastPathComponent)
         )
     }
 

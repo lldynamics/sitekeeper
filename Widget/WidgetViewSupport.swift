@@ -182,66 +182,10 @@ func widgetText(_ key: String) -> String {
 enum WidgetLocalizedText {
     static func string(for key: String) -> String {
         let isChinese = WidgetDataStore.languageCode.lowercased().hasPrefix("zh")
-        switch key {
-        case "widget_placeholder_project_primary":
-            return isChinese ? "金方花园" : "Garden Site"
-        case "widget_placeholder_project_secondary":
-            return isChinese ? "翰林府邸" : "Hanlin Residence"
-        case "widget_storage_app_group_unavailable_format":
-            return isChinese ? "Widget App Group 不可用：%@" : "Widget App Group unavailable: %@"
-        case "widget_material_stock_count_format":
-            return isChinese ? "%d 种材料" : "%d materials"
-        case "widget_low_stock_count_format":
-            return isChinese ? "%d 种不足" : "%d low stock"
-        case "widget_project_todo_count_format":
-            return isChinese ? "%d 项待办" : "%d pending"
-        case "widget_updated_time_format":
-            return isChinese ? "更新 %@" : "Updated %@"
-        case "widget_updated_datetime_format":
-            return isChinese ? "更新时间 %@" : "Updated %@"
-        case "widget_label_todo":
-            return isChinese ? "待办" : "To-do"
-        case "widget_label_today_todos":
-            return isChinese ? "今日待办" : "Today"
-        case "widget_label_project_progress":
-            return isChinese ? "项目进度" : "Progress"
-        case "widget_label_material_types":
-            return isChinese ? "材料种类" : "Materials"
-        case "widget_label_low_stock":
-            return isChinese ? "库存不足" : "Low Stock"
-        case "widget_label_missing_receipt":
-            return isChinese ? "缺票" : "No receipt"
-        case "widget_label_price_spike":
-            return isChinese ? "价格异动" : "Price Spike"
-        case "widget_label_backup_overdue":
-            return isChinese ? "备份超期" : "Backup"
-        case "widget_pending_items_text":
-            return isChinese ? "项待处理" : "pending"
-        case "widget_no_active_projects":
-            return isChinese ? "暂无进行中的项目" : "No active projects"
-        case "widget_project_status_active":
-            return isChinese ? "进行中" : "Active"
-        case "widget_project_status_paused":
-            return isChinese ? "暂停" : "Paused"
-        case "widget_project_status_completed":
-            return isChinese ? "已完成" : "Completed"
-        case "widget_project_status_settled":
-            return isChinese ? "已结算" : "Settled"
-        case "widget_project_status_archived":
-            return isChinese ? "已归档" : "Archived"
-        case "widget_project_status_unknown":
-            return isChinese ? "未知" : "Unknown"
-        case "widget_label_overview":
-            return isChinese ? "今日概览" : "Overview"
-        case "widget_label_focus_projects":
-            return isChinese ? "重点项目" : "Key Projects"
-        case "widget_label_risk":
-            return isChinese ? "风险" : "Risk"
-        case "widget_label_projects":
-            return isChinese ? "项目" : "Projects"
-        default:
-            return key
-        }
+        let resource = isChinese ? "zh-Hans" : "en"
+        let bundle = Bundle.main.path(forResource: resource, ofType: "lproj")
+            .flatMap(Bundle.init(path:)) ?? .main
+        return bundle.localizedString(forKey: key, value: key, table: nil)
     }
 }
 

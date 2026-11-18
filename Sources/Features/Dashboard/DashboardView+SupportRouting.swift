@@ -4,6 +4,23 @@ extension DashboardView {
     func collectRecentActivities(limit: Int) -> [TimelineActivity] {
         var activities: [TimelineActivity] = []
 
+        appendRecentWorkActivities(to: &activities)
+        appendRecentFinanceActivities(to: &activities)
+        appendRecentAssetActivities(to: &activities)
+
+        return activities
+            .sorted { lhs, rhs in
+                let lhsDate = parseDashboardDate(lhs.date) ?? .distantPast
+                let rhsDate = parseDashboardDate(rhs.date) ?? .distantPast
+                if lhsDate != rhsDate { return lhsDate > rhsDate }
+                if lhs.date != rhs.date { return lhs.date > rhs.date }
+                return lhs.id > rhs.id
+            }
+            .prefix(limit)
+            .map { $0 }
+    }
+
+    private func appendRecentWorkActivities(to activities: inout [TimelineActivity]) {
         for log in projectStore.dailyLogs {
             let title = log.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? AppLocalization.string("施工日志")
@@ -20,152 +37,125 @@ extension DashboardView {
             )
         }
 
-        for task in projectStore.progressTasks {
-            activities.append(
-                TimelineActivity(
-                    id: "progress-\(task.id.uuidString)",
-                    projectId: task.projectId,
-                    type: .progress,
-                    title: task.title,
-                    date: task.dueDate.isEmpty ? task.startDate : task.dueDate,
-                    subtitle: DashboardSubtitleBuilder.progress(task.clampedCompletion * 100)
+        activities += projectStore.progressTasks.map { task in
+            TimelineActivity(
+                id: "progress-\(task.id.uuidString)",
+                projectId: task.projectId,
+                type: .progress,
+                title: task.title,
+                date: task.dueDate.isEmpty ? task.startDate : task.dueDate,
+                subtitle: DashboardSubtitleBuilder.progress(task.clampedCompletion * 100)
+            )
+        }
+
+        activities += projectStore.siteTodos.map { todo in
+            TimelineActivity(
+                id: "todo-\(todo.id.uuidString)",
+                projectId: todo.projectId,
+                type: .todo,
+                title: todo.title,
+                date: todo.completedAt ?? todo.dueDate,
+                subtitle: DashboardSubtitleBuilder.todoStatus(isDone: todo.isDone)
+            )
+        }
+    }
+
+    private func appendRecentFinanceActivities(to activities: inout [TimelineActivity]) {
+        activities += financeStore.materialItems.map { item in
+            TimelineActivity(
+                id: "material-\(item.id.uuidString)",
+                projectId: item.projectId,
+                type: .material,
+                title: item.name,
+                date: item.arrivalDate,
+                subtitle: item.purchaseStatus.displayName
+            )
+        }
+
+        activities += financeStore.quoteItems.map { item in
+            TimelineActivity(
+                id: "quote-\(item.id.uuidString)",
+                projectId: item.projectId,
+                type: .quote,
+                title: item.name,
+                date: item.customerConfirmedDate,
+                subtitle: item.status.displayName
+            )
+        }
+
+        activities += financeStore.laborRecords.map { item in
+            TimelineActivity(
+                id: "labor-\(item.id.uuidString)",
+                projectId: item.projectId,
+                type: .labor,
+                title: item.workType.isEmpty ? AppLocalization.string("人工记录") : item.workType,
+                date: item.date,
+                subtitle: DashboardSubtitleBuilder.labor(
+                    workers: "\(item.workers)",
+                    hours: "\(item.hours)"
                 )
             )
         }
 
-        for todo in projectStore.siteTodos {
-            activities.append(
-                TimelineActivity(
-                    id: "todo-\(todo.id.uuidString)",
-                    projectId: todo.projectId,
-                    type: .todo,
-                    title: todo.title,
-                    date: todo.completedAt ?? todo.dueDate,
-                    subtitle: DashboardSubtitleBuilder.todoStatus(isDone: todo.isDone)
+        activities += projectStore.projectFinancialRecords.map { record in
+            TimelineActivity(
+                id: "finance-\(record.id.uuidString)",
+                projectId: record.projectId,
+                type: .financial,
+                title: "\(record.normalizedDirection.displayName) \(ReportBuilder.money(record.amount))",
+                date: record.date,
+                subtitle: record.normalizedCategory.displayName
+            )
+        }
+    }
+
+    private func appendRecentAssetActivities(to activities: inout [TimelineActivity]) {
+        activities += projectStore.projectDocuments.map { document in
+            TimelineActivity(
+                id: "document-\(document.id.uuidString)",
+                projectId: document.projectId,
+                type: .document,
+                title: document.title,
+                date: document.createdAt,
+                subtitle: DashboardSubtitleBuilder.document(
+                    category: document.category.displayName,
+                    pageCount: document.pageCount
                 )
             )
         }
 
-        for item in financeStore.materialItems {
-            activities.append(
-                TimelineActivity(
-                    id: "material-\(item.id.uuidString)",
-                    projectId: item.projectId,
-                    type: .material,
-                    title: item.name,
-                    date: item.arrivalDate,
-                    subtitle: item.purchaseStatus.displayName
-                )
+        activities += projectStore.projectWarehouseMovements.map { movement in
+            TimelineActivity(
+                id: "warehouse-\(movement.id.uuidString)",
+                projectId: movement.projectId,
+                type: .warehouse,
+                title: "\(movement.normalizedMovementType.displayName) \(movement.materialName)",
+                date: movement.date,
+                subtitle: "\(movement.quantity)\(movement.unit)"
             )
         }
 
-        for item in financeStore.quoteItems {
-            activities.append(
-                TimelineActivity(
-                    id: "quote-\(item.id.uuidString)",
-                    projectId: item.projectId,
-                    type: .quote,
-                    title: item.name,
-                    date: item.customerConfirmedDate,
-                    subtitle: item.status.displayName
-                )
+        activities += projectStore.quickNotes.map { note in
+            TimelineActivity(
+                id: "note-\(note.id.uuidString)",
+                projectId: note.projectId,
+                type: .note,
+                title: note.title.isEmpty ? AppLocalization.string("随手记") : note.title,
+                date: note.createdAt,
+                subtitle: note.content
             )
         }
 
-        for item in financeStore.laborRecords {
-            activities.append(
-                TimelineActivity(
-                    id: "labor-\(item.id.uuidString)",
-                    projectId: item.projectId,
-                    type: .labor,
-                    title: item.workType.isEmpty ? AppLocalization.string("人工记录") : item.workType,
-                    date: item.date,
-                    subtitle: DashboardSubtitleBuilder.labor(
-                        workers: "\(item.workers)",
-                        hours: "\(item.hours)"
-                    )
-                )
+        activities += projectStore.projectDrawings.map { drawing in
+            TimelineActivity(
+                id: "drawing-\(drawing.id.uuidString)",
+                projectId: drawing.projectId,
+                type: .drawing,
+                title: drawing.name,
+                date: drawing.importedAt,
+                subtitle: drawing.version
             )
         }
-
-        for record in projectStore.projectFinancialRecords {
-            activities.append(
-                TimelineActivity(
-                    id: "finance-\(record.id.uuidString)",
-                    projectId: record.projectId,
-                    type: .financial,
-                    title: "\(record.normalizedDirection.displayName) \(ReportBuilder.money(record.amount))",
-                    date: record.date,
-                    subtitle: record.normalizedCategory.displayName
-                )
-            )
-        }
-
-        for document in projectStore.projectDocuments {
-            activities.append(
-                TimelineActivity(
-                    id: "document-\(document.id.uuidString)",
-                    projectId: document.projectId,
-                    type: .document,
-                    title: document.title,
-                    date: document.createdAt,
-                    subtitle: DashboardSubtitleBuilder.document(
-                        category: document.category.displayName,
-                        pageCount: document.pageCount
-                    )
-                )
-            )
-        }
-
-        for movement in projectStore.projectWarehouseMovements {
-            activities.append(
-                TimelineActivity(
-                    id: "warehouse-\(movement.id.uuidString)",
-                    projectId: movement.projectId,
-                    type: .warehouse,
-                    title: "\(movement.normalizedMovementType.displayName) \(movement.materialName)",
-                    date: movement.date,
-                    subtitle: "\(movement.quantity)\(movement.unit)"
-                )
-            )
-        }
-
-        for note in projectStore.quickNotes {
-            activities.append(
-                TimelineActivity(
-                    id: "note-\(note.id.uuidString)",
-                    projectId: note.projectId,
-                    type: .note,
-                    title: note.title.isEmpty ? AppLocalization.string("随手记") : note.title,
-                    date: note.createdAt,
-                    subtitle: note.content
-                )
-            )
-        }
-
-        for drawing in projectStore.projectDrawings {
-            activities.append(
-                TimelineActivity(
-                    id: "drawing-\(drawing.id.uuidString)",
-                    projectId: drawing.projectId,
-                    type: .drawing,
-                    title: drawing.name,
-                    date: drawing.importedAt,
-                    subtitle: drawing.version
-                )
-            )
-        }
-
-        return activities
-            .sorted { lhs, rhs in
-                let lhsDate = parseDashboardDate(lhs.date) ?? .distantPast
-                let rhsDate = parseDashboardDate(rhs.date) ?? .distantPast
-                if lhsDate != rhsDate { return lhsDate > rhsDate }
-                if lhs.date != rhs.date { return lhs.date > rhs.date }
-                return lhs.id > rhs.id
-            }
-            .prefix(limit)
-            .map { $0 }
     }
 
     func projectName(_ id: UUID?) -> String? {
@@ -265,5 +255,4 @@ extension DashboardView {
     func parseDashboardDate(_ value: BusinessDateValue) -> Date? {
         value.date()
     }
-
 }

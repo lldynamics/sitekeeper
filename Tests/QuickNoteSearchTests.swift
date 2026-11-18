@@ -3,8 +3,28 @@ import Testing
 @testable import sitekeeper
 
 struct QuickNoteSearchTests {
+    @MainActor @Test func importedAudioDurationCanBeDisplayedSafely() throws {
+        let attachment = QuickNoteAttachment(kind: .audio, fileName: "recording.m4a", durationSeconds: 1e300)
+        let encoded = try JSONEncoder().encode(attachment)
+        let restored = try JSONDecoder().decode(QuickNoteAttachment.self, from: encoded)
+        #expect(restored.durationSeconds == 1e300)
+        #expect(restored.displayDurationSeconds == nil)
+
+        for value in [Double.infinity, -Double.infinity, Double.nan, -1, 0, Double(Int.max)] {
+            var invalid = attachment
+            invalid.durationSeconds = value
+            #expect(invalid.displayDurationSeconds == nil)
+        }
+        var ordinary = attachment
+        ordinary.durationSeconds = 12.75
+        #expect(ordinary.displayDurationSeconds == 12)
+        #expect(QuickNoteAudioPlayer.safeTime(1e300) == 0)
+        #expect(QuickNoteAudioPlayer.safeTime(.nan) == 0)
+        #expect(QuickNoteAudioPlayer.safeTime(12.75) == 12.75)
+    }
+
     @Test @MainActor func earlierResultCannotOverwriteNewerQuery() async {
-        let gate = SearchGate()
+        let gate = SearchTestGate()
         let oldNote = QuickNote(content: "old")
         let newNote = QuickNote(content: "new")
         let model = QuickNoteSearchModel { notes, _, keyword in
@@ -20,7 +40,7 @@ struct QuickNoteSearchTests {
     }
 
     @Test @MainActor func cancelledSearchDoesNotPublishAndNewDataRefreshes() async {
-        let gate = SearchGate()
+        let gate = SearchTestGate()
         let note = QuickNote(content: "record")
         let model = QuickNoteSearchModel { notes, _, _ in
             await gate.suspend()
@@ -55,28 +75,5 @@ struct QuickNoteSearchTests {
         #expect(QuickNoteSearch.filter(notes, projects: [project], keyword: "防水").map(\.id) == [unassigned.id, older.id])
         #expect(QuickNoteSearch.filter(notes, projects: [project], keyword: "  ").map(\.id) == [newer.id, unassigned.id, older.id])
         #expect(QuickNoteSearch.filter(notes, projects: [], keyword: "北区").isEmpty)
-    }
-}
-
-private actor SearchGate {
-    private var continuation: CheckedContinuation<Void, Never>?
-    private var started: CheckedContinuation<Void, Never>?
-
-    func suspend() async {
-        await withCheckedContinuation { continuation in
-            self.continuation = continuation
-            started?.resume()
-            started = nil
-        }
-    }
-
-    func waitUntilStarted() async {
-        guard continuation == nil else { return }
-        await withCheckedContinuation { started = $0 }
-    }
-
-    func release() {
-        continuation?.resume()
-        continuation = nil
     }
 }

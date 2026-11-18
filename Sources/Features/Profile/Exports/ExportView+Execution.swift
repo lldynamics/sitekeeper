@@ -6,7 +6,11 @@ extension ExportView {
     }
 
     var hasSelectedContent: Bool {
-        includeMaterials || includeQuotes || includeLabor || includeDailyLogs || includeProgress || includeTodos || includeProjectFinance || includeProjectDocuments || includeProjectContacts || includeProjectDrawings || includeWarehouseMovements || includeQuickNotes || includeOperationAuditLogs
+        enabledExportModuleCount > 0
+    }
+
+    var effectiveIncludeOperationAuditLogs: Bool {
+        includeOperationAuditLogs && filterProjectId == nil
     }
 
     var options: ExportContentOptions {
@@ -26,10 +30,14 @@ extension ExportView {
             includeOperationAuditLogs: includeOperationAuditLogs,
             operationAuditEntries: includeOperationAuditLogs ? filteredOperationAuditEntries : [],
             currencyDisplayMode: currencyDisplayMode
-        )
+        ).scoped(to: filterProjectId)
     }
 
     func buildExport() {
+        guard hasSelectedContent else {
+            presentExportError(AppLocalization.string("请至少选择一项导出内容。"))
+            return
+        }
         let snapshot = filteredSnapshotResult(filterProjectId: filterProjectId).snapshot
         let nextPayload: ExportPayload
         switch exportFormat {
@@ -64,14 +72,29 @@ extension ExportView {
     }
 
     var filteredOperationAuditEntries: [OperationAuditEntry] {
-        let entries = OperationAuditLog.entries()
+        guard filterProjectId == nil else { return [] }
+        return Self.auditEntries(
+            OperationAuditLog.entries(),
+            enableDateFilter: enableDateFilter,
+            start: filterStart,
+            end: filterEnd
+        )
+    }
+
+    static func auditEntries(
+        _ entries: [OperationAuditEntry],
+        enableDateFilter: Bool,
+        start: Date,
+        end: Date,
+        calendar: Calendar = .current
+    ) -> [OperationAuditEntry] {
         guard enableDateFilter else { return entries }
-        let start = Calendar.current.startOfDay(for: min(filterStart, filterEnd))
-        let endStart = Calendar.current.startOfDay(for: max(filterStart, filterEnd))
-        let end = Calendar.current.date(byAdding: .day, value: 1, to: endStart) ?? endStart
+        let lower = calendar.startOfDay(for: min(start, end))
+        let endStart = calendar.startOfDay(for: max(start, end))
+        let upper = calendar.date(byAdding: .day, value: 1, to: endStart) ?? endStart
         return entries.filter { entry in
             let timestamp = Date(timeIntervalSince1970: entry.timestamp)
-            return timestamp >= start && timestamp < end
+            return timestamp >= lower && timestamp < upper
         }
     }
 
@@ -230,5 +253,25 @@ extension ExportView {
         let rangeStart = Calendar.current.startOfDay(for: min(filterStart, filterEnd))
         let rangeEnd = Calendar.current.startOfDay(for: max(filterStart, filterEnd))
         return itemStart <= rangeEnd && itemEnd >= rangeStart
+    }
+}
+
+extension ExportContentOptions {
+    /// Audit entries have no project identity. They are available only for all-project exports.
+    func scoped(to projectId: UUID?) -> Self {
+        guard projectId != nil else { return self }
+        var result = self
+        result.includeOperationAuditLogs = false
+        result.operationAuditEntries = []
+        return result
+    }
+
+    var selectedModuleCount: Int {
+        [
+            includeMaterials, includeQuotes, includeLabor, includeDailyLogs,
+            includeProgress, includeTodos, includeProjectFinance, includeProjectDocuments,
+            includeProjectContacts, includeProjectDrawings, includeWarehouseMovements,
+            includeQuickNotes, includeOperationAuditLogs
+        ].filter { $0 }.count
     }
 }

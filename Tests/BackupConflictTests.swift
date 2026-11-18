@@ -4,7 +4,8 @@ import Foundation
 
 @MainActor
 struct BackupConflictTests {
-    @Test func backupMergeRenamesAcceptedAttachmentWhenLocalFileNameAlreadyExists() async throws {
+    @Test(arguments: [true, false])
+    func backupMergeRenamesAcceptedAttachmentWhenNameIsAlreadyReferenced(localFileExists: Bool) async throws {
         let projectID = UUID()
         let localNoteID = UUID()
         let importedNoteID = UUID()
@@ -34,7 +35,11 @@ struct BackupConflictTests {
         let importedSnapshot = incomingNoteSnapshot(project: project, noteID: importedNoteID, fileName: sharedFileName)
         let archive = try BackupArchiveService.makeArchive(from: importedSnapshot)
         defer { try? FileManager.default.removeItem(at: archive.fileURL) }
-        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(localData, fileName: sharedFileName)
+        if localFileExists {
+            _ = try QuickNoteAttachmentStorage.saveDataOrThrow(localData, fileName: sharedFileName)
+        } else {
+            try FileManager.default.removeItem(at: QuickNoteAttachmentStorage.validatedFileURL(for: sharedFileName))
+        }
 
         let restoreTransaction = try BackupArchiveService.prepareEmbeddedFileRestore(from: archive.fileURL)
         let counts = try await BackupImportCoordinator.commitAndPersistImport(
@@ -53,10 +58,59 @@ struct BackupConflictTests {
         #expect(store.quickNotes.first(where: { $0.id == localNoteID })?.attachments.first?.fileName == sharedFileName)
         #expect(importedDestinationFileName != nil)
         #expect(importedDestinationFileName != sharedFileName)
-        #expect(QuickNoteAttachmentStorage.data(for: sharedFileName) == localData)
+        #expect(QuickNoteAttachmentStorage.data(for: sharedFileName) == (localFileExists ? localData : nil))
         if let importedDestinationFileName {
             #expect(QuickNoteAttachmentStorage.data(for: importedDestinationFileName) == incomingData)
         }
+    }
+
+    @Test(arguments: [true, false])
+    func backupMergeRestoresMissingDocumentWithoutOverwritingExistingData(localFileExists: Bool) async throws {
+        let backupBytes = Data("original CSV".utf8)
+        let localBytes = Data("updated CSV".utf8)
+        let project = Project(name: "Restore test", location: "")
+        let fileName = try ProjectDocumentStorage.saveDataOrThrow(data: backupBytes, projectId: project.id, fileExtension: "csv")
+        let document = ProjectDocument(projectId: project.id, title: "Edited locally", fileName: fileName, fileType: "csv")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let store = DataStore(storageDirectory: directory)
+        defer {
+            store.dataHealthScanTask?.cancel()
+            try? FileManager.default.removeItem(at: ProjectDocumentStorage.fileURL(for: fileName))
+            try? FileManager.default.removeItem(at: directory)
+        }
+        await store.awaitInitialLoad()
+        store.replaceProjects([project])
+        store.replaceProjectDocuments([document])
+        try await store.flushSaveOrThrow()
+
+        let local = store.makeSnapshot(includePhotoFiles: false)
+        var imported = local
+        imported.projectDocuments[0].title = "Earlier title"
+        let archive = try BackupArchiveService.makeArchive(from: imported)
+        defer { try? FileManager.default.removeItem(at: archive.fileURL) }
+        let documentURL = try ProjectDocumentStorage.validatedFileURL(for: fileName)
+        if localFileExists {
+            try localBytes.write(to: documentURL, options: .atomic)
+        } else {
+            try FileManager.default.removeItem(at: documentURL)
+        }
+        let rawPreview = try BackupArchiveService.previewBackup(from: archive.fileURL)
+        let preview = BackupImportCoordinator.previewWithLocalImpact(rawPreview, previous: local)
+        let mergeFiles = try #require(preview.mergeFilePlan).get()
+        let overwriteFiles = try #require(preview.overwriteFilePlan).get()
+        #expect(mergeFiles.documentFileNames == (localFileExists ? [] : [fileName]))
+        #expect(overwriteFiles.documentFileNames == [fileName])
+
+        let result = try await BackupImportWorkflow.run(
+            sourceURL: archive.fileURL, preparedMetadata: preview.snapshot,
+            operations: LiveBackupImportWorkflowOperations(store: store, selectedImportMode: { .merge }),
+            onEvent: { _ in }
+        )
+        #expect(result.restoredFileCount == mergeFiles.totalCount)
+        #expect(store.projectDocuments.first?.title == document.title)
+        #expect(store.projectDocuments.first?.fileName == fileName)
+        #expect(ProjectDocumentStorage.data(for: fileName) == (localFileExists ? localBytes : backupBytes))
     }
 
     @Test func backupMergeDoesNotOverwriteLocalAttachmentOrRestoreRejectedOrphan() async throws {

@@ -6,7 +6,6 @@
 python3 scripts/tests/run_unit_conversion_host_tests.py
 ```
 
-入口只编译两份完整生产源文件：`EngineeringCalculations.swift`、`CalculationValidator.swift`。
 不裁剪、不复制算法，不需要模拟器或第三方依赖。使用正常 SwiftPM 沙箱，失败后停止，不自动换入口重试。
 
 共 9 项测试：直接复用 `Tests/UnitConverterTests.swift` 的原 5 项，新增 4 项对应

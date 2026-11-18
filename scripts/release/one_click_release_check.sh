@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export PATH="$PATH:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin"
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 bash scripts/release/check_xcode_version.sh
@@ -38,8 +40,9 @@ Runs one-click release checks in fixed order:
   4) Generic iOS build
   5) Simulator build-for-testing
   6) Unit tests (test-without-building)
-  7) Release preflight
-  8) Untracked Swift file check
+  7) Isolated backup integration tests
+  8) Release preflight
+  9) Untracked Swift file check
 
 Flags:
   --allow-dirty          Allow running with a dirty worktree.
@@ -363,7 +366,7 @@ run_preflight() {
     args+=(--skip-tests)
   fi
 
-  echo "==> Step 7/8: preflight (${args[*]:-no extra args})"
+  echo "==> Step 8/9: preflight (${args[*]:-no extra args})"
   remove_generated_project_metadata
   DEVELOPER_DIR="$DEVELOPER_DIR_PATH" \
   DERIVED_DATA_PATH="$DERIVED_DATA_PATH" \
@@ -385,7 +388,7 @@ if [[ "$ALLOW_DIRTY" -ne 1 ]]; then
   fi
 fi
 
-echo "==> Step 1/8: xcodegen generate"
+echo "==> Step 1/9: xcodegen generate"
 before_project_status="$(git -c core.quotePath=false status --porcelain -- project.yml sitekeeper.xcodeproj)"
 xcodegen generate
 remove_generated_project_metadata
@@ -397,15 +400,15 @@ if [[ "$before_project_status" != "$after_project_status" ]]; then
   exit 4
 fi
 
-echo "==> Step 2/8: SwiftFormat lint"
+echo "==> Step 2/9: SwiftFormat lint"
 scripts/dev/check_swift_format.sh Sources Widget Tests UITests
 
-echo "==> Step 3/8: SwiftLint"
-scripts/dev/check_swift_lint.sh Sources Widget Tests UITests
+echo "==> Step 3/9: SwiftLint"
+scripts/dev/check_swift_lint.sh
 
 prepare_derived_data
 
-echo "==> Step 4/8: generic iOS build"
+echo "==> Step 4/9: generic iOS build"
 DEVELOPER_DIR="$DEVELOPER_DIR_PATH" \
 xcodebuild \
   -quiet \
@@ -417,7 +420,7 @@ xcodebuild \
   -configuration Debug \
   build
 
-echo "==> Step 5/8: simulator build-for-testing"
+echo "==> Step 5/9: simulator build-for-testing"
 resolve_simulator_id || {
   echo "ERROR: No bootable iPhone simulator found. Set SIM_ID or install iOS simulator runtime." >&2
   exit 5
@@ -441,15 +444,23 @@ run_xcodebuild_with_timeout \
   env DEVELOPER_DIR="$DEVELOPER_DIR_PATH" "${SIMULATOR_CMD[@]}" build-for-testing
 remove_derived_data_metadata
 
-echo "==> Step 6/8: unit test"
+echo "==> Step 6/9: unit test"
 run_xcodebuild_with_timeout \
   "$UNIT_TEST_TIMEOUT_SECONDS" \
   "unit test (sitekeeper-iOS)" \
   env DEVELOPER_DIR="$DEVELOPER_DIR_PATH" "${SIMULATOR_CMD[@]}" test-without-building
 
+echo "==> Step 7/9: isolated backup integration tests"
+backup_result_bundle="${BACKUP_INTEGRATION_RESULT_BUNDLE_PATH:-$ROOT_DIR/build/Verification/backup-integration-${PPID}-$(date +%s).xcresult}"
+run_xcodebuild_with_timeout \
+  "$UNIT_TEST_TIMEOUT_SECONDS" \
+  "isolated backup integration tests" \
+  env DEVELOPER_DIR="$DEVELOPER_DIR_PATH" bash scripts/release/run_backup_integration_tests.sh \
+    "$RESOLVED_SIM_ID" "$backup_result_bundle"
+
 run_preflight
 
-echo "==> Step 8/8: check untracked Swift files"
+echo "==> Step 9/9: check untracked Swift files"
 check_untracked_swift_files "final gate"
 
 echo "==> One-click release check passed"

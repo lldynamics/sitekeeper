@@ -67,7 +67,7 @@ struct ProjectFilePreparedData: Sendable {
             try Task.checkCancellation()
             inspections.append(ProjectDocumentDeliveryInspection(
                 project: project, documents: files.documents, drawings: files.drawings,
-                logs: files.logs, quickNotes: files.quickNotes
+                logs: files.logs, quickNotes: files.quickNotes, todos: files.todos
             ))
         }
         try Task.checkCancellation()

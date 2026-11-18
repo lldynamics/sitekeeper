@@ -223,7 +223,8 @@ extension ReportBuilder {
                 documents: documents,
                 drawings: drawings,
                 logs: logs,
-                quickNotes: quickNotes
+                quickNotes: quickNotes,
+                todos: todos
             ),
             drawingGroupsWithoutCurrent: projectPackageDrawingGroupsWithoutCurrentVersion(drawings)
         )
@@ -256,5 +257,117 @@ extension ReportBuilder {
 
     private static func normalizedReportDateKey(_ value: BusinessDateValue) -> String? {
         value.calendarDay()?.storageText
+    }
+}
+
+/// One entry per archive destination. Shared source files intentionally remain separate
+/// entries when they belong to different records or rectification stages.
+struct ProjectPackageSourceReference {
+    enum Storage {
+        case document, drawing, photo, quickNote
+    }
+
+    let storage: Storage
+    let fileName: String
+    let archivePath: String
+    let missingDescription: String
+    let checkProgress: String
+    let writeProgress: String
+    let issueDetails: [String: String]
+
+    func validatedFileURL() throws -> URL {
+        guard !fileName.isEmpty else { return AttachmentStoragePath.unavailableURL }
+        switch storage {
+        case .document: return try ProjectDocumentStorage.validatedFileURL(for: fileName)
+        case .drawing: return try DrawingStorage.validatedFileURL(for: fileName)
+        case .photo: return try PhotoStorage.validatedFileURL(for: fileName)
+        case .quickNote: return try QuickNoteAttachmentStorage.validatedFileURL(for: fileName)
+        }
+    }
+
+    var exists: Bool {
+        guard let url = try? validatedFileURL() else { return false }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    var fileBytes: Int {
+        guard let url = try? validatedFileURL() else { return 0 }
+        return QuickNoteAttachmentStorage.fileSize(at: url)
+    }
+}
+
+extension ReportBuilder {
+    static func projectPackageSourceReferences(
+        documents: [ProjectDocument],
+        drawings: [ProjectDrawing],
+        logs: [DailyLog],
+        quickNotes: [QuickNote],
+        todos: [SiteTodo] = []
+    ) -> [ProjectPackageSourceReference] {
+        var references = documents.map { document in
+            ProjectPackageSourceReference(
+                storage: .document, fileName: document.fileName,
+                archivePath: "\(ProjectPackageSchema.documentDirectory)/\(safeZipName(document.title))-\(document.fileName)",
+                missingDescription: locFormat("资料 %@", document.title),
+                checkProgress: locFormat("检查票据 %@", document.title),
+                writeProgress: locFormat("打包票据 %@", document.title),
+                issueDetails: ["asset_type": "project_document", "file_name": document.fileName, "item_title": document.title]
+            )
+        }
+        references += drawings.map { drawing in
+            ProjectPackageSourceReference(
+                storage: .drawing, fileName: drawing.fileName,
+                archivePath: "\(ProjectPackageSchema.drawingDirectory)/\(safeZipName(drawing.name))-\(drawing.fileName)",
+                missingDescription: locFormat("图纸 %@", drawing.name),
+                checkProgress: locFormat("检查图纸 %@", drawing.name),
+                writeProgress: locFormat("打包图纸 %@", drawing.name),
+                issueDetails: ["asset_type": "project_drawing", "file_name": drawing.fileName, "item_title": drawing.name]
+            )
+        }
+        for log in logs {
+            references += log.photoAttachments.map { photo in
+                ProjectPackageSourceReference(
+                    storage: .photo, fileName: photo.fileName,
+                    archivePath: "\(ProjectPackageSchema.photoDirectory)/\(log.date)-\(safeZipName(photo.tag.displayName))-\(photo.fileName)",
+                    missingDescription: locFormat("照片 %@ %@", log.date.storageText, photo.tag.displayName),
+                    checkProgress: locFormat("检查照片 %@ %@", log.date.storageText, photo.tag.displayName),
+                    writeProgress: locFormat("打包照片 %@ %@", log.date.storageText, photo.tag.displayName),
+                    issueDetails: ["asset_type": "daily_log_photo", "file_name": photo.fileName, "log_date": log.date.storageText, "photo_tag": photo.tag.displayName]
+                )
+            }
+        }
+        for todo in todos {
+            let stages: [(String?, String, PhotoTag)] = [
+                (todo.rectificationBeforePhotoFileName, "before", .rectificationBefore),
+                (todo.rectificationAfterPhotoFileName, "after", .rectificationAfter)
+            ]
+            for (name, stage, tag) in stages {
+                guard let name, !name.isEmpty else { continue }
+                references.append(ProjectPackageSourceReference(
+                    storage: .photo, fileName: name,
+                    archivePath: "\(ProjectPackageSchema.photoDirectory)/todos/\(todo.id.uuidString)/\(stage)-\(name)",
+                    missingDescription: locFormat("照片 %@ %@", todo.title, tag.displayName),
+                    checkProgress: locFormat("检查照片 %@ %@", todo.title, tag.displayName),
+                    writeProgress: locFormat("打包照片 %@ %@", todo.title, tag.displayName),
+                    issueDetails: ["asset_type": "todo_rectification_photo", "file_name": name, "todo_id": todo.id.uuidString, "photo_stage": stage]
+                ))
+            }
+        }
+        for note in quickNotes {
+            let title = safeZipName(note.title, fallback: "quick_note")
+            let created = safeZipName(Formatters.displayDateText(note.createdAt))
+            let displayTitle = note.title.isEmpty ? Formatters.displayDateText(note.createdAt) : note.title
+            references += note.attachments.map { attachment in
+                ProjectPackageSourceReference(
+                    storage: .quickNote, fileName: attachment.fileName,
+                    archivePath: "\(ProjectPackageSchema.quickNoteDirectory)/\(attachment.attachmentKind.rawValue)/\(created)-\(title)-\(attachment.fileName)",
+                    missingDescription: locFormat("随手记附件 %@", note.title.isEmpty ? note.createdAt.storageText : note.title),
+                    checkProgress: locFormat("检查随手记附件 %@", displayTitle),
+                    writeProgress: locFormat("打包随手记附件 %@", displayTitle),
+                    issueDetails: ["asset_type": "quick_note_attachment", "file_name": attachment.fileName, "item_title": note.title]
+                )
+            }
+        }
+        return references
     }
 }

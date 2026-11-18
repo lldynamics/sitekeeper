@@ -1,18 +1,87 @@
 import Foundation
 
-struct RemoteConstructionMethodPackPayload: Codable {
+enum ConstructionMethodPackLimits {
+    static let maximumResponseBytes = 8 * 1024 * 1024
+    static let maximumCacheBytes = maximumResponseBytes + 64 * 1024
+    static let maximumItems = 1_000
+    static let maximumStringBytes = 256 * 1024
+
+    static func validate(_ payload: RemoteConstructionMethodPackPayload) throws {
+        func check(_ text: String) throws {
+            guard text.utf8.count <= maximumStringBytes else { throw ConstructionMethodPackLimitError.exceeded }
+        }
+        try check(payload.generatedAt)
+        guard payload.packs.count <= maximumItems else { throw ConstructionMethodPackLimitError.exceeded }
+        for pack in payload.packs {
+            for value in [pack.id, pack.sourceSlug, pack.sourceURL, pack.sourceVersion, pack.title,
+                          pack.trade, pack.versionName, pack.publishStatus, pack.tutorialBody, pack.updatedAt] {
+                try check(value)
+            }
+            for values in [pack.procedureSteps, pack.qualityChecklist, pack.safetyChecklist, pack.relatedStandards, pack.tags] {
+                guard values.count <= maximumItems else { throw ConstructionMethodPackLimitError.exceeded }
+                for value in values { try check(value) }
+            }
+            for links in [pack.relatedTemplates, pack.relatedArticles] {
+                guard links.count <= maximumItems else { throw ConstructionMethodPackLimitError.exceeded }
+                for link in links {
+                    try check(link.title)
+                    try check(link.href)
+                }
+            }
+        }
+    }
+}
+
+enum ConstructionMethodPackLimitError: LocalizedError {
+    case exceeded
+
+    var errorDescription: String? {
+        AppLocalization.string("工艺包内容超过支持的大小或数量限制。")
+    }
+}
+
+@propertyWrapper
+struct ConstructionMethodPackBoundedArray<Element: Codable & Sendable>: Codable, Sendable {
+    var wrappedValue: [Element]
+
+    init(wrappedValue: [Element]) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        if let count = container.count, count > ConstructionMethodPackLimits.maximumItems {
+            throw ConstructionMethodPackLimitError.exceeded
+        }
+        var values: [Element] = []
+        while !container.isAtEnd {
+            guard values.count < ConstructionMethodPackLimits.maximumItems else {
+                throw ConstructionMethodPackLimitError.exceeded
+            }
+            values.append(try container.decode(Element.self))
+        }
+        wrappedValue = values
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.unkeyedContainer()
+        for value in wrappedValue { try container.encode(value) }
+    }
+}
+
+struct RemoteConstructionMethodPackPayload: Codable, Sendable {
     let schemaVersion: Int
     let generatedAt: String
     let count: Int
-    let packs: [RemoteConstructionMethodPack]
+    @ConstructionMethodPackBoundedArray var packs: [RemoteConstructionMethodPack]
 }
 
-struct RemoteConstructionMethodPackLink: Codable, Hashable {
+struct RemoteConstructionMethodPackLink: Codable, Hashable, Sendable {
     let title: String
     let href: String
 }
 
-struct RemoteConstructionMethodPack: Identifiable, Codable {
+struct RemoteConstructionMethodPack: Identifiable, Codable, Sendable {
     private static let knowledgeBaseOrigin = "https://gongdizhishi.com"
 
     let id: String
@@ -24,13 +93,13 @@ struct RemoteConstructionMethodPack: Identifiable, Codable {
     let versionName: String
     let publishStatus: String
     let tutorialBody: String
-    let procedureSteps: [String]
-    let qualityChecklist: [String]
-    let safetyChecklist: [String]
-    let relatedStandards: [String]
-    let relatedTemplates: [RemoteConstructionMethodPackLink]
-    let relatedArticles: [RemoteConstructionMethodPackLink]
-    let tags: [String]
+    @ConstructionMethodPackBoundedArray var procedureSteps: [String]
+    @ConstructionMethodPackBoundedArray var qualityChecklist: [String]
+    @ConstructionMethodPackBoundedArray var safetyChecklist: [String]
+    @ConstructionMethodPackBoundedArray var relatedStandards: [String]
+    @ConstructionMethodPackBoundedArray var relatedTemplates: [RemoteConstructionMethodPackLink]
+    @ConstructionMethodPackBoundedArray var relatedArticles: [RemoteConstructionMethodPackLink]
+    @ConstructionMethodPackBoundedArray var tags: [String]
     let updatedAt: String
 
     func constructionMethod(existing: ConstructionMethod?) -> ConstructionMethod {
@@ -139,25 +208,31 @@ struct ConstructionMethodPackOfflineCacheSnapshot: Codable {
 enum ConstructionMethodPackOfflineCacheStore {
     private static let key = UserPreferenceKeys.constructionMethodPackOfflineCache
 
-    static func load() -> ConstructionMethodPackOfflineCacheSnapshot? {
-        guard let data = UserPreferencesStore.shared.data(key) else { return nil }
-        return try? JSONDecoder().decode(ConstructionMethodPackOfflineCacheSnapshot.self, from: data)
+    static func load(store: UserPreferencesStore = .shared) -> ConstructionMethodPackOfflineCacheSnapshot? {
+        guard let data = store.data(key), data.count <= ConstructionMethodPackLimits.maximumCacheBytes,
+              let snapshot = try? JSONDecoder().decode(ConstructionMethodPackOfflineCacheSnapshot.self, from: data),
+              (try? ConstructionMethodPackLimits.validate(snapshot.payload)) != nil else { return nil }
+        return snapshot
     }
 
     @discardableResult
     static func save(
         endpoint: URL,
-        payload: RemoteConstructionMethodPackPayload
+        payload: RemoteConstructionMethodPackPayload,
+        rawBytes: Int,
+        store: UserPreferencesStore = .shared
     ) -> ConstructionMethodPackOfflineCacheSnapshot? {
-        let rawBytes = (try? JSONEncoder().encode(payload).count) ?? 0
+        guard rawBytes >= 0, rawBytes <= ConstructionMethodPackLimits.maximumResponseBytes,
+              (try? ConstructionMethodPackLimits.validate(payload)) != nil else { return nil }
         let snapshot = ConstructionMethodPackOfflineCacheSnapshot(
             endpoint: endpoint.absoluteString,
             payload: payload,
             cachedAt: Date().timeIntervalSince1970,
             rawBytes: rawBytes
         )
-        guard let data = try? JSONEncoder().encode(snapshot) else { return nil }
-        UserPreferencesStore.shared.set(data, for: key)
+        guard let data = try? JSONEncoder().encode(snapshot),
+              data.count <= ConstructionMethodPackLimits.maximumCacheBytes else { return nil }
+        store.set(data, for: key)
         return snapshot
     }
 
@@ -169,6 +244,7 @@ enum ConstructionMethodPackOfflineCacheStore {
 struct ConstructionMethodPackFetchResult: Sendable {
     let endpoint: URL
     let payload: RemoteConstructionMethodPackPayload
+    let rawBytes: Int
 }
 
 enum ConstructionMethodPackImportConfiguration {
@@ -278,9 +354,14 @@ enum ConstructionMethodPackImportService {
         var lastError: Error?
         for endpoint in candidateEndpoints {
             do {
-                let payload = try await fetch(from: endpoint)
-                return ConstructionMethodPackFetchResult(endpoint: endpoint, payload: payload)
+                let (payload, rawBytes) = try await fetchResponse(
+                    from: endpoint, session: .shared, maximumBytes: ConstructionMethodPackLimits.maximumResponseBytes
+                )
+                return ConstructionMethodPackFetchResult(endpoint: endpoint, payload: payload, rawBytes: rawBytes)
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
+                if Task.isCancelled { throw CancellationError() }
                 lastError = error
             }
         }
@@ -297,13 +378,43 @@ enum ConstructionMethodPackImportService {
         return endpoints
     }
 
-    static func fetch(from endpoint: URL) async throws -> RemoteConstructionMethodPackPayload {
-        let (data, response) = try await URLSession.shared.data(from: endpoint)
+    static func fetch(
+        from endpoint: URL,
+        session: URLSession = .shared,
+        maximumBytes: Int = ConstructionMethodPackLimits.maximumResponseBytes
+    ) async throws -> RemoteConstructionMethodPackPayload {
+        try await fetchResponse(from: endpoint, session: session, maximumBytes: maximumBytes).payload
+    }
+
+    private static func fetchResponse(
+        from endpoint: URL, session: URLSession, maximumBytes: Int
+    ) async throws -> (payload: RemoteConstructionMethodPackPayload, rawBytes: Int) {
+        let limit = min(max(0, maximumBytes), ConstructionMethodPackLimits.maximumResponseBytes)
+        let (bytes, response) = try await session.bytes(from: endpoint)
+        defer { bytes.task.cancel() }
         if let httpResponse = response as? HTTPURLResponse,
            !(200...299).contains(httpResponse.statusCode) {
             throw URLError(.badServerResponse)
         }
-        let decoder = JSONDecoder()
-        return try decoder.decode(RemoteConstructionMethodPackPayload.self, from: data)
+        guard response.expectedContentLength <= Int64(limit) else {
+            throw ConstructionMethodPackLimitError.exceeded
+        }
+        let data = try await readBoundedBytes(bytes, maximumBytes: limit)
+        let payload = try JSONDecoder().decode(RemoteConstructionMethodPackPayload.self, from: data)
+        try ConstructionMethodPackLimits.validate(payload)
+        return (payload, data.count)
+    }
+
+    static func readBoundedBytes<S: AsyncSequence>(_ bytes: S, maximumBytes: Int) async throws -> Data where S.Element == UInt8 {
+        try Task.checkCancellation()
+        var data = Data()
+        for try await byte in bytes {
+            if (data.count & 0xFFF) == 0 {
+                try Task.checkCancellation()
+            }
+            guard data.count < maximumBytes else { throw ConstructionMethodPackLimitError.exceeded }
+            data.append(byte)
+        }
+        return data
     }
 }

@@ -5,6 +5,7 @@ actor CloudBackupCoordinator {
 
     func backupToCloud(
         snapshot: BackupSnapshot,
+        scope: CloudBackupScope,
         progress: (@Sendable (BackupArchiveProgress) -> Void)? = nil
     ) async throws -> CloudBackupExecutionResult {
         var archiveFileURL: URL?
@@ -22,7 +23,8 @@ actor CloudBackupCoordinator {
                 try BackupArchiveService.makeArchive(
                     from: snapshot,
                     progress: progress,
-                    shouldCancel: { relay.isCancelled() || Task.isCancelled }
+                    shouldCancel: { relay.isCancelled() || Task.isCancelled },
+                    cloudBackupScope: scope
                 )
             }
             archiveFileURL = archive.fileURL

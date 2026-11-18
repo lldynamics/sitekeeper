@@ -30,6 +30,10 @@ enum ProjectDocumentStorage {
         return fileName
     }
 
+    static func validatedFileURL(for fileName: String) throws -> URL {
+        try fileFamily.validatedFileURL(for: fileName)
+    }
+
     static func fileURL(for fileName: String) -> URL {
         fileFamily.fileURL(for: fileName)
     }

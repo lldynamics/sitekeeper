@@ -208,7 +208,6 @@ enum WidgetProjectStatus: String {
             return .unknown
         }
     }
-
 }
 
 enum WidgetDataBuilder {

@@ -44,6 +44,10 @@ extension BackupArchiveService {
             throw BackupArchiveError.missingManifest
         }
         _ = try decodeManifest(from: manifestData)
+        guard let metadataData = stage.metadataData else {
+            throw BackupArchiveError.missingMetadata
+        }
+        _ = try decodeJSONSnapshot(from: metadataData)
         report(totalBytes, totalBytes, loc("原文件已暂存"))
         shouldCleanupStageOnExit = false
         return stage.transaction
@@ -87,6 +91,9 @@ extension BackupArchiveService {
     ) throws {
         do {
             let stagedURL = directory.appendingPathComponent(fileName)
+            guard !FileManager.default.fileExists(atPath: stagedURL.path) else {
+                throw SimpleZipArchiveReader.ZipReadError.duplicateEntry(fileName)
+            }
             try writeEntryToFile(stagedURL)
             BackupArchiveSecurity.applyDataProtection(to: stagedURL)
         } catch BackupArchiveError.cancelled {

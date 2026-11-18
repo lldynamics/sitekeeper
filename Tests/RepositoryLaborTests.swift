@@ -129,10 +129,12 @@ struct RepositoryLaborTests {
         #expect(throws: RepositoryError.invalidLaborValues) { try draft.command() }
         draft.hoursText = "0"
         draft.unitRateText = ""
-        guard case .putLaborRecord(let empty) = try draft.command() else { Issue.record("Unexpected command"); return }
+        guard case .putLaborRecord(let empty) = try draft.command() else { Issue.record("Unexpected command")
+        return }
         #expect(empty.unitRate.isEmpty && empty.workers.optionalDecimal == 0)
         draft.unitRateText = "0"
-        guard case .putLaborRecord(let zero) = try draft.command() else { Issue.record("Unexpected command"); return }
+        guard case .putLaborRecord(let zero) = try draft.command() else { Issue.record("Unexpected command")
+        return }
         #expect(!zero.unitRate.isEmpty && zero.unitRate.optionalDecimal == 0)
     }
 

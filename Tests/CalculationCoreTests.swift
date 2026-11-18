@@ -85,10 +85,6 @@ struct CalculationCoreTests {
         #expect(EngineeringCalculations.recommendedBreaker(current: 250) == nil)
     }
 
-    @Test func breakerAtZero() {
-        #expect(EngineeringCalculations.recommendedBreaker(current: 0) == nil)
-    }
-
     @Test func recommendationRulesRejectInvalidInputsInsteadOfReturningSmallestSize() {
         for current in [Double.nan, -Double.infinity, -1, 0] {
             #expect(EngineeringCalculations.recommendedBreaker(current: current) == nil)

@@ -10,7 +10,6 @@ struct WatermarkCameraToolView: View {
     let autoOpenCameraOnAppear: Bool
     @State private var settings = WatermarkCameraSettingsStore()
     @State private var captures = WatermarkCameraCaptureStore()
-    @State private var exportCoordinator = WatermarkCameraExportCoordinator()
     @StateObject private var locationManager = WatermarkCameraLocationManager()
     @State private var selectedIDs = Set<UUID>()
     @State private var showCamera = false
@@ -91,7 +90,8 @@ struct WatermarkCameraToolView: View {
             WatermarkTemplateSection(templateRaw: binding(for: \.templateRaw))
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 WatermarkInfoSection(tag: binding(for: \.tag), photographer: binding(for: \.photographer),
-                    locationText: Binding(get: { settings.locationText }, set: { locationManager.cancelRequest(); settings.setManualLocation($0) }),
+                    locationText: Binding(get: { settings.locationText }, set: { locationManager.cancelRequest()
+                    settings.setManualLocation($0) }),
                     locationStatusText: locationStatus(at: timeline.date), isRequesting: locationManager.isRequesting,
                     requestLocation: locationManager.requestLocation)
             }
@@ -162,7 +162,8 @@ struct WatermarkCameraToolView: View {
                 albumAttemptPhoto = nil
             }
             Button(AppLocalization.string("未找到，允许重新保存")) {
-                if let photo = albumAttemptPhoto { Task { await captures.resolveAlbumAttempt(id: photo.id, retryConfirmed: true); await saveToAlbum([photo]) } }
+                if let photo = albumAttemptPhoto { Task { await captures.resolveAlbumAttempt(id: photo.id, retryConfirmed: true)
+                await saveToAlbum([photo]) } }
                 albumAttemptPhoto = nil
             }
         } message: { Text(AppLocalization.string("上次保存结果尚未确认。请先检查系统相册，重复保存可能产生重复照片。")) }
@@ -220,7 +221,8 @@ struct WatermarkCameraToolView: View {
             if !shown { Task { await refreshLogDraftStatus() } }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await captures.restore(); await refreshLogDraftStatus() } }
+            if phase == .active { Task { await captures.restore()
+            await refreshLogDraftStatus() } }
         }
         .onReceive(locationManager.$snapshot) { snapshot in
             if let snapshot { settings.acceptDeviceLocation(snapshot) }
@@ -320,13 +322,15 @@ struct WatermarkCameraToolView: View {
             Button { archiveSelected() } label: { Label(AppLocalization.string("按拍摄项目归档"), systemImage: "folder.badge.plus") }
                 .accessibilityIdentifier("watermark-batch-archive")
             Menu {
-                Button(AppLocalization.string("保存所选到相册")) { let photos = selectedPhotos; Task { await saveToAlbum(photos) } }
+                Button(AppLocalization.string("保存所选到相册")) { let photos = selectedPhotos
+                Task { await saveToAlbum(photos) } }
                 Button(AppLocalization.string("导出照片包 ZIP")) { exportSelected(.zip) }
                 Button(AppLocalization.string("导出照片册 PDF")) { exportSelected(.pdf) }
                 if selectedPhotos.count == 1 {
                     Button(AppLocalization.string("导出照片 JPEG")) { exportSelected(.jpeg) }
                     Button(AppLocalization.string("标注副本")) { annotationPhoto = selectedPhotos.first }
-                    Button(AppLocalization.string("关联已有整改")) { rectificationInitialID = nil; rectificationPhoto = selectedPhotos.first }
+                    Button(AppLocalization.string("关联已有整改")) { rectificationInitialID = nil
+                    rectificationPhoto = selectedPhotos.first }
                     Button(AppLocalization.string("新建整改待办")) { prepareTodo() }
                 }
                 Button(AppLocalization.string("删除所选草稿"), role: .destructive) { showClearPhotosConfirm = true }
@@ -343,7 +347,8 @@ struct WatermarkCameraToolView: View {
 
     private func requestCamera(rectification: Bool) {
         guard !busy else { return }
-        guard WatermarkCameraAccess.hasBackCamera else { presentBlockingError(AppLocalization.string("wm_camera_device_unavailable_error")); return }
+        guard WatermarkCameraAccess.hasBackCamera else { presentBlockingError(AppLocalization.string("wm_camera_device_unavailable_error"))
+        return }
         Task {
             guard await WatermarkCameraAccess.requestCameraAccessIfNeeded() else {
                 presentBlockingError(AppLocalization.string("wm_camera_permission_denied_error"), settingsURL: WatermarkCameraAccess.appSettingsURL)
@@ -357,11 +362,17 @@ struct WatermarkCameraToolView: View {
             cameraProjectId = settings.selectedProjectId
             sessionPhotoIDs = []
             cameraSessionID = UUID()
-            if rectification { pendingRectificationID = nil; showRectificationCapture = true }
-            else { showCamera = true }
+            if rectification {
+                pendingRectificationID = nil
+                showRectificationCapture = true
+            } else {
+                showCamera = true
+            }
         }
     }
+}
 
+extension WatermarkCameraToolView {
     private func finishRectificationCapture() {
         let pending = captureTask
         let issueID = pendingRectificationID
@@ -454,7 +465,10 @@ struct WatermarkCameraToolView: View {
         let token = UUID()
         operationID = token
         batchTask = Task { @MainActor in
-            defer { operationID = UUID(); isWorking = false; batchTask = nil; workProgress = (0, 0) }
+            defer { operationID = UUID()
+            isWorking = false
+            batchTask = nil
+            workProgress = (0, 0) }
             let worker = Task.detached(priority: .userInitiated) {
                 try WatermarkCameraBatchService.exportFile(photos, format: format, compression: quality, name: name) { done, total in
                     Task { @MainActor in if operationID == token { workProgress = (done, total) } }
@@ -462,7 +476,8 @@ struct WatermarkCameraToolView: View {
             }
             do {
                 let file = try await withTaskCancellationHandler(operation: { try await worker.value }, onCancel: { worker.cancel() })
-                guard !Task.isCancelled else { WatermarkCameraBatchService.cleanupExport(at: file.cleanupURL); return }
+                guard !Task.isCancelled else { WatermarkCameraBatchService.cleanupExport(at: file.cleanupURL)
+                return }
                 exportCleanupURL = file.cleanupURL
                 preparedExport = file
             } catch is CancellationError { presentInfo(AppLocalization.string("已取消处理，照片草稿已保留。")) }
@@ -481,7 +496,9 @@ struct WatermarkCameraToolView: View {
         isWorking = true
         workProgress = (0, photos.count)
         batchTask = Task { @MainActor in
-            defer { isWorking = false; batchTask = nil; workProgress = (0, 0) }
+            defer { isWorking = false
+            batchTask = nil
+            workProgress = (0, 0) }
             var failures = [String]()
             for (index, photo) in photos.enumerated() {
                 if Task.isCancelled { break }
@@ -506,11 +523,13 @@ struct WatermarkCameraToolView: View {
         defer { savingAlbumBatch = false }
         for candidate in photos {
             guard let photo = captures.photos.first(where: { $0.id == candidate.id }), photo.albumStatus != .completed else { continue }
-            let result = await captures.saveToAlbum(photo: photo, quality: settings.exportQuality, coordinator: exportCoordinator)
+            let result = await captures.saveToAlbum(photo: photo, quality: settings.exportQuality)
             switch result {
             case .success: break
-            case .blockingError(let message, let url): presentBlockingError(message, settingsURL: url); return
-            case .error(let message): presentBlockingError(message); return
+            case .blockingError(let message, let url): presentBlockingError(message, settingsURL: url)
+            return
+            case .error(let message): presentBlockingError(message)
+            return
             }
         }
     }

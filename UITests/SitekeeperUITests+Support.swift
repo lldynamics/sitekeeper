@@ -59,13 +59,6 @@ extension SitekeeperUITests {
         }
     }
 
-    func attachScreenshot(_ app: XCUIApplication, named name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
-    }
-
     @discardableResult
     func launchApp(
         skipOnboarding: Bool = true,
@@ -73,6 +66,7 @@ extension SitekeeperUITests {
         enableBackupPreview: Bool = false,
         allowClearWithoutBackup: Bool = false,
         backupRoundTripSlot: String? = nil,
+        disableAnimations: Bool = false,
         dynamicTypeSize: String? = nil,
         languageCode: String = "zh-Hans",
         reviewRegressionFixture: Bool = false,
@@ -106,6 +100,7 @@ extension SitekeeperUITests {
             app.launchEnvironment["UITEST_BACKUP_ROUNDTRIP"] = "1"
             app.launchEnvironment["UITEST_BACKUP_ROUNDTRIP_SLOT"] = backupRoundTripSlot
         }
+        if disableAnimations { app.launchEnvironment["UITEST_DISABLE_ANIMATIONS"] = "1" }
         if let dynamicTypeSize {
             app.launchArguments += ["-uitest-dynamic-type-size", dynamicTypeSize]
             app.launchEnvironment["UITEST_DYNAMIC_TYPE_SIZE"] = dynamicTypeSize
@@ -385,7 +380,7 @@ extension SitekeeperUITests {
         // The success toast can expire while XCTest waits for animations to idle.
         // Verify durable imported records rather than that transient notification.
         tapPrimaryModule(app, name: "项目")
-        XCTAssertTrue(app.staticTexts["阳光花园 3# 楼"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["虚构项目-1"].firstMatch.waitForExistence(timeout: 10))
     }
 
     func rotateAndWaitForSceneResize(_ app: XCUIApplication, to orientation: UIDeviceOrientation) {
@@ -430,7 +425,7 @@ extension SitekeeperUITests {
     @discardableResult
     func openImportedProject(
         _ app: XCUIApplication,
-        preferredName: String = "阳光花园 3# 楼"
+        preferredName: String = "虚构项目-1"
     ) -> String {
         let preferredProject = app.staticTexts[preferredName]
         if preferredProject.waitForExistence(timeout: 6) {
@@ -458,5 +453,15 @@ extension SitekeeperUITests {
         let navigationBar = app.navigationBars.firstMatch
         XCTAssertTrue(navigationBar.waitForExistence(timeout: 6))
         return navigationBar.identifier
+    }
+}
+
+@MainActor
+extension XCTestCase {
+    func attachScreenshot(_ app: XCUIApplication, named name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }

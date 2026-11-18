@@ -11,7 +11,9 @@ extension ConstructionMethodPackImportSheet {
             payloadSource = .website
             loadedEndpoint = result.endpoint
             selectedPackIDs = Set(result.payload.packs.map(\.id))
-            cachedSnapshot = ConstructionMethodPackOfflineCacheStore.save(endpoint: result.endpoint, payload: result.payload)
+            if let saved = ConstructionMethodPackOfflineCacheStore.save(endpoint: result.endpoint, payload: result.payload, rawBytes: result.rawBytes) {
+                cachedSnapshot = saved
+            }
         } catch {
             let failedMessage = String(format: AppLocalization.string("无法连接到工程知识网站：%@"), error.localizedDescription)
             let failedStatus = ConstructionMethodPackImportStatus(

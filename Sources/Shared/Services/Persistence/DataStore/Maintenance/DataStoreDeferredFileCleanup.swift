@@ -8,14 +8,9 @@ struct DataStoreDeferredFileCleanup {
 
 extension DataStoreDeferredFileCleanup {
     private static func normalizedFileNames(_ fileNames: [String]) -> [String] {
-        Array(
-            Set(
-                fileNames
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
-            )
-        )
-        .sorted()
+        // Attachment metadata uses the exact filename; trimming can target a
+        // different, still-referenced file during overwrite cleanup.
+        Array(Set(fileNames.filter { !$0.isEmpty })).sorted()
     }
 
     static func combined(

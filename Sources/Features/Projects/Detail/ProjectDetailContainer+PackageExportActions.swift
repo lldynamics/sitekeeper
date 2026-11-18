@@ -6,7 +6,8 @@ extension ProjectDetailContainer {
             documents: snapshot.relatedDocuments,
             drawings: snapshot.relatedDrawings,
             logs: snapshot.relatedLogs,
-            quickNotes: snapshot.relatedQuickNotes
+            quickNotes: snapshot.relatedQuickNotes,
+            todos: snapshot.relatedTodos
         ) {
         case .proceed:
             exportProjectPackage(project, snapshot: snapshot)

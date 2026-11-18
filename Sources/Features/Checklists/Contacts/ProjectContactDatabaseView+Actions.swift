@@ -125,38 +125,74 @@ extension ProjectContactDatabaseView {
     }
 
     func exportContactsVCard() {
-        var lines: [String] = []
-        for contact in filteredContacts {
-            lines.append("BEGIN:VCARD")
-            lines.append("VERSION:3.0")
-            lines.append("FN:\(contact.name)")
-            let cleaned = normalizedPhone(contact.phone)
-            if !cleaned.isEmpty {
-                lines.append("TEL;TYPE=CELL:\(cleaned)")
-            }
-            if !contact.company.isEmpty {
-                lines.append("ORG:\(contact.company)")
-            }
-            if !contact.note.isEmpty {
-                lines.append("NOTE:\(contact.note)")
-            }
-            let projectRef = projectName(contact.projectId)
-            if !projectRef.isEmpty {
-                lines.append("NOTE:项目:\(projectRef)")
-            }
-            let relatedNames = projectNames(for: contact.relatedProjectIds)
-            if !relatedNames.isEmpty {
-                lines.append("NOTE:历史项目:\(relatedNames.joined(separator: "、"))")
-            }
-            lines.append("END:VCARD")
-        }
-        let data = lines.joined(separator: "\r\n").data(using: .utf8) ?? Data()
         exportPayload = ExportPayload(
-            data: data,
+            data: Self.contactsVCardData(contacts: filteredContacts, projects: projects),
             contentType: .vCard,
             defaultFilename: AppLocalization.string("项目联系人.vcf")
         )
         showExporter = true
+    }
+
+    static func contactsVCardData(contacts: [ProjectContact], projects: [Project]) -> Data {
+        var lines: [String] = []
+        for contact in contacts {
+            lines.append("BEGIN:VCARD")
+            lines.append("VERSION:3.0")
+            lines.append("FN:\(vCardText(contact.name))")
+            // The app stores one free-form name. Keep it intact in the given-name
+            // component instead of asking vCard consumers to infer name parts from FN.
+            lines.append("N:;\(vCardText(contact.name));;;")
+            let cleaned = contact.phone.filter { $0.isASCII && $0.isNumber }
+            if !cleaned.isEmpty {
+                lines.append("TEL;TYPE=CELL:\(cleaned)")
+            }
+            if !contact.company.isEmpty {
+                lines.append("ORG:\(vCardText(contact.company))")
+            }
+            var notes: [String] = []
+            if !contact.note.isEmpty { notes.append(contact.note) }
+            let projectRef = projects.first(where: { $0.id == contact.projectId })?.name
+                ?? AppLocalization.string("未知项目")
+            if !projectRef.isEmpty {
+                notes.append("项目:" + projectRef)
+            }
+            let relatedNames = contact.relatedProjectIds.compactMap { id in
+                projects.first(where: { $0.id == id })?.name
+            }
+            if !relatedNames.isEmpty {
+                notes.append("历史项目:" + relatedNames.joined(separator: "、"))
+            }
+            if !notes.isEmpty { lines.append("NOTE:\(vCardText(notes.joined(separator: "\n")))") }
+            lines.append("END:VCARD")
+        }
+        return Data(lines.map(foldVCardLine).joined(separator: "\r\n").utf8)
+    }
+
+    private static func foldVCardLine(_ line: String) -> String {
+        var result = ""
+        var octets = 0
+        for scalar in line.unicodeScalars {
+            let length = scalar.utf8.count
+            if octets + length > 75 {
+                result += "\r\n "
+                octets = 1
+            }
+            result.unicodeScalars.append(scalar)
+            octets += length
+        }
+        return result
+    }
+
+    /// Escape vCard 3.0 TEXT values before assembling physical property lines.
+    /// Foundation replacement preserves Unicode, including CRLF grapheme clusters.
+    static func vCardText(_ raw: String) -> String {
+        raw
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\r\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\n")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: ";", with: "\\;")
+            .replacingOccurrences(of: ",", with: "\\,")
     }
 
     func projectName(_ id: UUID) -> String {
@@ -170,7 +206,7 @@ extension ProjectContactDatabaseView {
     }
 
     func normalizedPhone(_ raw: String) -> String {
-        raw.filter(\.isNumber)
+        raw.filter { $0.isASCII && $0.isNumber }
     }
 
     func contactCRMSummary(for contact: ProjectContact) -> String? {

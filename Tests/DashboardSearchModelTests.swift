@@ -23,7 +23,7 @@ struct DashboardSearchModelTests {
     }
 
     @Test @MainActor func slowerEarlierQueryCannotOverwriteNewQueryOrFilter() async {
-        let gate = DashboardSearchGate()
+        let gate = SearchTestGate()
         let older = suggestion("old"), newer = suggestion("new")
         let model = DashboardSearchModel { _, request in
             if request.keyword == "old" { await gate.suspend() }
@@ -41,7 +41,7 @@ struct DashboardSearchModelTests {
     }
 
     @Test @MainActor func cancelledWorkerCannotPublishAndReceivesCancellation() async {
-        let gate = DashboardSearchGate()
+        let gate = SearchTestGate()
         let record = suggestion("record")
         let model = DashboardSearchModel { _, _ in
             await gate.suspend()
@@ -59,7 +59,7 @@ struct DashboardSearchModelTests {
     }
 
     @Test @MainActor func sameKeywordWithNewProjectCannotBeOverwrittenByEarlierScope() async {
-        let gate = DashboardSearchGate()
+        let gate = SearchTestGate()
         let firstProject = UUID(), secondProject = UUID()
         let old = suggestion("first project"), current = suggestion("second project")
         let model = DashboardSearchModel { _, request in
@@ -100,7 +100,7 @@ struct DashboardSearchModelTests {
     }
 
     @Test @MainActor func emptyQueryClearsRowsAndInvalidatesOlderWork() async {
-        let gate = DashboardSearchGate()
+        let gate = SearchTestGate()
         let record = suggestion("record")
         let model = DashboardSearchModel { _, _ in
             await gate.suspend()
@@ -123,19 +123,25 @@ struct DashboardSearchModelTests {
         let request = DashboardSearchRequest(keyword: "record", collectionVersions: [1])
         await model.refresh(snapshot: .init(), request: request, debounce: .zero)
         #expect(model.suggestions(for: request) == [record])
-        var project = request; project.projectID = UUID()
-        var category = request; category.category = .financial
-        var data = request; data.collectionVersions = [2]
-        var language = request; language.language = "en"
-        var keyword = request; keyword.keyword = "other"
-        var timezone = request; timezone.timeZoneIdentifier = "Asia/Shanghai"
+        var project = request
+        project.projectID = UUID()
+        var category = request
+        category.category = .financial
+        var data = request
+        data.collectionVersions = [2]
+        var language = request
+        language.language = "en"
+        var keyword = request
+        keyword.keyword = "other"
+        var timezone = request
+        timezone.timeZoneIdentifier = "Asia/Shanghai"
         for changed in [project, category, data, language, keyword, timezone] {
             #expect(model.suggestions(for: changed).isEmpty)
         }
     }
 
     @Test @MainActor func timezoneRefreshHidesOldDatesAndRejectsEarlierTimezoneWorker() async {
-        let gate = DashboardSearchGate()
+        let gate = SearchTestGate()
         let shanghai = suggestion("2026-10-28 08:00"), losAngeles = suggestion("2026-10-27 17:00")
         let model = DashboardSearchModel { _, request in
             if request.timeZoneIdentifier == "Asia/Shanghai" { await gate.suspend() }
@@ -164,9 +170,12 @@ struct DashboardSearchModelTests {
             financeSource: ObjectIdentifier(financeStore)
         )
         await model.refresh(snapshot: .init(), request: request, debounce: .zero)
-        var otherRoot = request; otherRoot.storeSource = ObjectIdentifier(otherStore)
-        var otherProject = request; otherProject.projectSource = ObjectIdentifier(otherProjectStore)
-        var otherFinance = request; otherFinance.financeSource = ObjectIdentifier(otherFinanceStore)
+        var otherRoot = request
+        otherRoot.storeSource = ObjectIdentifier(otherStore)
+        var otherProject = request
+        otherProject.projectSource = ObjectIdentifier(otherProjectStore)
+        var otherFinance = request
+        otherFinance.financeSource = ObjectIdentifier(otherFinanceStore)
         for changed in [otherRoot, otherProject, otherFinance] {
             #expect(changed.collectionVersions == request.collectionVersions)
             #expect(model.suggestions(for: changed).isEmpty)
@@ -188,18 +197,21 @@ struct DashboardSearchModelTests {
         await model.refresh(snapshot: .init(projects: [project], notes: [note]), request: request, debounce: .zero)
         #expect(model.suggestions(for: request).isEmpty)
         project.name = "新项目"
-        var edited = request; edited.collectionVersions = [2]
+        var edited = request
+        edited.collectionVersions = [2]
         await model.refresh(snapshot: .init(projects: [project], notes: [note]), request: edited, debounce: .zero)
         #expect(model.suggestions(for: edited).map(\.entityId) == [note.id])
-        var deleted = edited; deleted.collectionVersions = [3]
+        var deleted = edited
+        deleted.collectionVersions = [3]
         await model.refresh(snapshot: .init(projects: [project]), request: deleted, debounce: .zero)
         #expect(model.suggestions(for: deleted).isEmpty)
     }
 
     @Test @MainActor func independentSearchOwnersDoNotInvalidateEachOther() async {
-        let gate = DashboardSearchGate()
+        let gate = SearchTestGate()
         let firstRecord = suggestion("first"), secondRecord = suggestion("second")
-        let first = DashboardSearchModel { _, _ in await gate.suspend(); return [firstRecord] }
+        let first = DashboardSearchModel { _, _ in await gate.suspend()
+        return [firstRecord] }
         let second = DashboardSearchModel { _, _ in [secondRecord] }
         let one = DashboardSearchRequest(keyword: "first"), two = DashboardSearchRequest(keyword: "second")
         let task = Task { await first.refresh(snapshot: .init(), request: one, debounce: .zero) }
@@ -219,30 +231,4 @@ struct DashboardSearchModelTests {
 private actor DashboardSearchCalls {
     private(set) var count = 0
     func record() { count += 1 }
-}
-
-private actor DashboardSearchGate {
-    private var continuation: CheckedContinuation<Void, Never>?
-    private var started: CheckedContinuation<Void, Never>?
-    private(set) var wasCancelled = false
-
-    func suspend() async {
-        await withCheckedContinuation { continuation in
-            self.continuation = continuation
-            started?.resume()
-            started = nil
-        }
-    }
-
-    func waitUntilStarted() async {
-        guard continuation == nil else { return }
-        await withCheckedContinuation { started = $0 }
-    }
-
-    func recordCancellation(_ value: Bool) { wasCancelled = value }
-
-    func release() {
-        continuation?.resume()
-        continuation = nil
-    }
 }

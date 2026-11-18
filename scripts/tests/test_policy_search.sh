@@ -61,7 +61,7 @@ for backend in auto grep; do
   done
 done
 rm "$TASK_DIR/repo/Sources/PolicyViolation.swift"
-rm "$TASK_DIR/repo/Tests/Fixtures/SampleDataFixture.json"
+rm "$TASK_DIR/repo/Sources/Shared/Services/Fixtures/SampleDataFixture.swift"
 rm "$TASK_DIR/repo/Sources/Features/Checklists/Drawings/DrawingLibraryToolView.swift"
 for backend in auto grep; do
   for guard in backup_contract_boundary drawing_release_boundary; do

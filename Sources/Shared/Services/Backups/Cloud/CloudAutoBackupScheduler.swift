@@ -50,7 +50,7 @@ private enum CloudAutoBackupJob {
                 guard Self.shouldContinue(CloudBackupExecutionGate.evaluateSnapshot(snapshot)) else {
                     return nil as CloudBackupExecutionResult?
                 }
-                return try await CloudBackupCoordinator.shared.backupToCloud(snapshot: snapshot)
+                return try await CloudBackupCoordinator.shared.backupToCloud(snapshot: snapshot, scope: options.archiveScope)
             }
             guard let result else { return }
             CloudBackupSettingsStore.saveAutoLastStatus(result.savedFile.uploadState.statusMessage)

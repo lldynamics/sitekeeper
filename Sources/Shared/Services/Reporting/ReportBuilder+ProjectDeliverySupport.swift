@@ -250,11 +250,15 @@ extension ReportBuilder {
     }
 
     private static func tsvField(_ raw: String) -> String {
-        raw
+        let flattened = spreadsheetText(raw)
             .replacingOccurrences(of: "\r\n", with: " ")
             .replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "\t", with: " ")
+        // Preserve literal quotes; otherwise a spreadsheet may treat user text as
+        // field quoting and expose a formula that was not at the original start.
+        guard flattened.contains("\"") else { return flattened }
+        return "\"" + flattened.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 
     static func quickNoteAttachmentSummaryColumns(

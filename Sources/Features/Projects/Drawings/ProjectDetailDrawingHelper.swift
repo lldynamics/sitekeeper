@@ -74,13 +74,24 @@ enum ProjectDetailDrawingHelper {
         return String(format: AppLocalization.string("外部打开失败：%@"), reason)
     }
 
-    static func nextDrawingVersion(name: String, drawings: [ProjectDrawing]) -> String {
+    static func nextDrawingVersion(name: String, drawings: [ProjectDrawing]) -> String? {
         let key = normalizedDrawingNameKey(name)
         let sameName = drawings.filter { candidate in
             normalizedDrawingNameKey(candidate.name) == key
         }
-        let versions = sameName.map(\.version).compactMap(versionNumber)
-        let next = (versions.max() ?? 0) + 1
+        var versions: [Int] = []
+        for drawing in sameName {
+            if let value = versionNumber(drawing.version) {
+                versions.append(value)
+                continue
+            }
+            var raw = drawing.version.uppercased().trimmingCharacters(in: .whitespacesAndNewlines)[...]
+            if raw.first == "V" { raw.removeFirst() }
+            if raw.first == "+" || raw.first == "-" { raw.removeFirst() }
+            if !raw.isEmpty && raw.allSatisfy({ $0.isASCII && $0.isNumber }) { return nil }
+        }
+        let (next, overflow) = (versions.max() ?? 0).addingReportingOverflow(1)
+        guard !overflow else { return nil }
         return "V\(next)"
     }
 
@@ -156,11 +167,12 @@ enum ProjectDetailDrawingHelper {
         for drawing: ProjectDrawing,
         in drawings: [ProjectDrawing],
         strategy: ProjectDrawingImportStrategy
-    ) -> (version: String, isCurrentVersion: Bool, replacement: ProjectDrawing?) {
+    ) -> (version: String, isCurrentVersion: Bool, replacement: ProjectDrawing?)? {
         let family = drawingFamily(for: drawing, in: drawings)
         switch strategy {
         case .createNewVersion:
-            return (nextDrawingVersion(name: drawing.name, drawings: drawings), true, nil)
+            guard let version = nextDrawingVersion(name: drawing.name, drawings: family) else { return nil }
+            return (version, true, nil)
         case .mergeCurrentVersion:
             if let current = family.first(where: \.isCurrentVersion) {
                 return (normalizedVersion(current.version), current.isCurrentVersion, nil)

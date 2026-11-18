@@ -101,7 +101,8 @@ struct WatermarkRectificationCapturePicker: View {
         let frozenProjectID = projectId
         let beforeURL = PhotoStorage.fileURL(for: beforeName)
         preparationTask = Task { @MainActor in
-            defer { loadingTodoID = nil; preparationTask = nil }
+            defer { loadingTodoID = nil
+            preparationTask = nil }
             // Read and decode only a bounded alignment image, never retain a full-resolution original.
             let reference = await ImageDownsampleService.downsampledImageAsync(
                 at: beforeURL, maxPixelSize: 1400, source: "WatermarkRectificationCapturePicker"

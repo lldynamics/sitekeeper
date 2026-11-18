@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "project.yml"
+      - "Package.swift"
       - "sitekeeper.xcodeproj/**"
       - ".swiftformat"
       - ".swiftlint.yml"
@@ -12,6 +13,7 @@ on:
       - "Sources/**"
       - "Widget/**"
       - "Tests/**"
+      - "HostTests/**"
       - "UITests/**"
       - "scripts/release/**"
       - "scripts/dev/**"
@@ -26,6 +28,7 @@ on:
       - main
     paths:
       - "project.yml"
+      - "Package.swift"
       - "sitekeeper.xcodeproj/**"
       - ".swiftformat"
       - ".swiftlint.yml"
@@ -34,6 +37,7 @@ on:
       - "Sources/**"
       - "Widget/**"
       - "Tests/**"
+      - "HostTests/**"
       - "UITests/**"
       - "scripts/release/**"
       - "scripts/dev/**"
@@ -97,14 +101,30 @@ jobs:
       - name: Check ZIP adapter and system unzip interoperability
         run: bash scripts/tests/test_zip_adapter.sh
 
+      - name: Run SwiftPM host and portable workflow tests
+        run: |
+          swift test
+          python3 scripts/tests/run_workflow_core_tests.py
+          python3 scripts/tests/run_practical_workflow_tests.py
+
       - name: Run one-click release gate
         env:
           DERIVED_DATA_PATH: /tmp/sitekeeper-release-derived-data
           SIMULATOR_NAME: sitekeeper-ci-release
+          BACKUP_INTEGRATION_RESULT_BUNDLE_PATH: ${{ runner.temp }}/sitekeeper-backup-integration.xcresult
         run: |
           export PATH="$RUNNER_TEMP/sitekeeper-tools:$PATH"
           xcodegen --version
           scripts/release/one_click_release_check.sh
+
+      - name: Upload isolated backup integration result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-integration-xcresult
+          path: ${{ runner.temp }}/sitekeeper-backup-integration.xcresult
+          if-no-files-found: warn
+          retention-days: 14
 
   ui-smoke:
     name: UI smoke (${{ matrix.device_family }})

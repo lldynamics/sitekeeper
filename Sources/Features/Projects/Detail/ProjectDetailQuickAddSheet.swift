@@ -292,12 +292,6 @@ private extension QuickAddSheet {
         )
     }
 
-    func sortedLinkedMethodIDs() -> [UUID] {
-        linkedMethodIDs.sorted { lhs, rhs in
-            lhs.uuidString < rhs.uuidString
-        }
-    }
-
     func methodTitle(_ method: ConstructionMethod) -> String {
         let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
         return title.isEmpty ? AppLocalization.string("未命名工艺") : title

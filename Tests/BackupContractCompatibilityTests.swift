@@ -31,6 +31,25 @@ struct BackupContractCompatibilityTests {
         #expect(manifest.appVersion == decodedSnapshot.appVersion)
         #expect(manifest.appBuild == decodedSnapshot.appBuild)
         #expect(manifest.exportedAt == decodedSnapshot.backupCreatedAt)
+        #expect(manifest.scope == nil)
+    }
+
+    @Test(arguments: [true, false])
+    func cloudScopeUsesSelectedOptionsAndSurvivesArchiveValidation(includeAttachments: Bool) throws {
+        var options = CloudBackupContentOptions.all
+        options.includeAttachments = includeAttachments
+        let snapshot = BackupSnapshot(
+            materialItems: [], quoteItems: [], laborRecords: [],
+            projects: [Project(name: "Backup scope", location: "")], dailyLogs: [], historyRecords: [], templates: []
+        )
+        let archive = try BackupArchiveService.makeArchive(
+            from: snapshot.applyingCloudBackupContentOptions(options),
+            progress: nil, shouldCancel: nil, cloudBackupScope: options.archiveScope
+        )
+        defer { try? FileManager.default.removeItem(at: archive.fileURL) }
+        let manifest = try BackupArchiveService.validateArchive(at: archive.fileURL)
+        #expect(manifest.scope == (includeAttachments ? .complete : .partial))
+        #expect(manifest.schemaVersion == BackupSnapshot.currentSchemaVersion)
     }
 
     @Test func backupManifestRejectsUnexpectedMetadataPath() throws {

@@ -23,10 +23,6 @@ enum ProjectDetailAssetActions {
         ProjectDetailFinanceDocumentActions.previewURL(for: document)
     }
 
-    static func deleteDocument(_ document: ProjectDocument, store: DataStore) {
-        ProjectDetailFinanceDocumentActions.deleteDocument(document, store: store)
-    }
-
     static func saveDocumentEdit(_ document: ProjectDocument, store: DataStore) {
         ProjectDetailFinanceDocumentActions.saveDocumentEdit(document, store: store)
     }
@@ -56,26 +52,6 @@ enum ProjectDetailAssetActions {
     ) -> String? {
         ProjectDetailFinanceDocumentActions.importCapturedImage(
             image,
-            note: note,
-            projectId: projectId,
-            linkedFinancialRecordId: linkedFinancialRecordId,
-            store: store
-        )
-    }
-
-    static func importAttachmentData(
-        _ data: Data,
-        fileExtension: String,
-        title: String,
-        note: String,
-        projectId: UUID,
-        linkedFinancialRecordId: UUID?,
-        store: DataStore
-    ) -> String? {
-        ProjectDetailFinanceDocumentActions.importAttachmentData(
-            data,
-            fileExtension: fileExtension,
-            title: title,
             note: note,
             projectId: projectId,
             linkedFinancialRecordId: linkedFinancialRecordId,

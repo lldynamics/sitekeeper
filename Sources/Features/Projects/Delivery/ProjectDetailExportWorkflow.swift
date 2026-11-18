@@ -83,14 +83,16 @@ enum ProjectDetailExportWorkflow {
         documents: [ProjectDocument],
         drawings: [ProjectDrawing],
         logs: [DailyLog],
-        quickNotes: [QuickNote]
+        quickNotes: [QuickNote],
+        todos: [SiteTodo] = []
     ) -> ProjectDetailPackageRequestDecision {
         // ① 先检查缺失文件（阻断性错误，让用户第一时间看到）
         let missingFiles = ProjectDetailImportExportActions.missingProjectPackageFiles(
             documents: documents,
             drawings: drawings,
             logs: logs,
-            quickNotes: quickNotes
+            quickNotes: quickNotes,
+            todos: todos
         )
         if !missingFiles.isEmpty {
             let preview = missingFiles.prefix(8).joined(separator: AppLocalization.string("、"))
@@ -114,7 +116,8 @@ enum ProjectDetailExportWorkflow {
             documents: documents,
             drawings: drawings,
             logs: logs,
-            quickNotes: quickNotes
+            quickNotes: quickNotes,
+            todos: todos
         )
         switch ProjectDetailImportExportActions.packageSizeDecision(for: estimatedBytes) {
         case .normal:

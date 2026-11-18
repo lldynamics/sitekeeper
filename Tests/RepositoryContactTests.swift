@@ -1,8 +1,110 @@
 import Foundation
 import Testing
+import Contacts
 @testable import sitekeeper
 
 struct RepositoryContactTests {
+    @MainActor
+    @Test func vCardFoldsLongUnicodeTextWithoutSplittingCharacters() throws {
+        let project = Project(name: "项目", location: "")
+        let note = String(repeating: "施工👷记录", count: 20) + "\n下一行;含,标点\\"
+        let contact = ProjectContact(projectId: project.id, name: "张工", note: note)
+        let data = ProjectContactDatabaseView.contactsVCardData(contacts: [contact], projects: [project])
+        let physicalLines = String(decoding: data, as: UTF8.self).components(separatedBy: "\r\n")
+        #expect(physicalLines.allSatisfy { $0.utf8.count <= 75 })
+        #expect(physicalLines.contains { $0.hasPrefix(" ") })
+        let parsed = try CNContactVCardSerialization.contacts(with: data)
+        #expect(parsed.count == 1)
+        #expect(parsed.first?.givenName == "张工")
+        #expect(parsed.first?.note == note + "\n项目:项目")
+    }
+
+    @MainActor
+    @Test func vCardStructuredNamePreservesFreeFormNamesThroughContacts() throws {
+        let project = Project(name: "项目", location: "")
+        let longName = String(repeating: "施工👷🏽‍♀️", count: 20)
+        let cases = [
+            ("Alice Smith", "Alice Smith"),
+            ("张工", "张工"),
+            ("张👷🏽‍♀️;三,四\\五", "张👷🏽‍♀️;三,四\\五"),
+            ("张工\r\nTEL:999\rEMAIL:injected@example.test\nEND:VCARD\nBEGIN:VCARD\nFN:伪造联系人",
+             "张工\nTEL:999\nEMAIL:injected@example.test\nEND:VCARD\nBEGIN:VCARD\nFN:伪造联系人"),
+            (longName, longName)
+        ]
+        for (name, expectedName) in cases {
+            let contact = ProjectContact(projectId: project.id, name: name, company: "普通单位")
+            let data = ProjectContactDatabaseView.contactsVCardData(contacts: [contact], projects: [project])
+            let parsed = try CNContactVCardSerialization.contacts(with: data)
+            #expect(parsed.count == 1)
+            let imported = try #require(parsed.first)
+            #expect(imported.givenName == expectedName)
+            #expect(imported.familyName.isEmpty)
+            #expect(imported.middleName.isEmpty)
+            #expect(imported.namePrefix.isEmpty)
+            #expect(imported.nameSuffix.isEmpty)
+            #expect(imported.organizationName == "普通单位")
+            #expect(imported.phoneNumbers.isEmpty)
+            #expect(imported.emailAddresses.isEmpty)
+            #expect(imported.note == "项目:项目")
+            let lines = String(decoding: data, as: UTF8.self).components(separatedBy: "\r\n")
+            #expect(lines.allSatisfy { $0.utf8.count <= 75 })
+        }
+    }
+
+    @MainActor
+    @Test func vCardEscapesTextAndPreservesRecordBoundariesAndPhoneBehavior() throws {
+        let project = Project(name: "甲\r\nEND:VCARD\r\nBEGIN:VCARD", location: "")
+        let related = Project(name: "乙;丙,丁\\工程", location: "")
+        let contact = ProjectContact(
+            projectId: project.id, relatedProjectIds: [related.id],
+            name: "张👷🏽‍♀️;三,四\\五\r\nTEL:999",
+            company: "公司\rEND:VCARD\nBEGIN:VCARD",
+            phone: "+86 (010) 1234 ext 2\r\nX-TEST:9",
+            note: "一行\r\n二行\r三行\n四行;逗,号\\n\r\nEMAIL:injected@example.test\nURL:https://injected.invalid/\rTITLE:Injected\r\nADR:;;Injected Street;;;;"
+        )
+        let ordinary = ProjectContact(projectId: project.id, name: "李工", phone: "")
+        let data = ProjectContactDatabaseView.contactsVCardData(contacts: [contact, ordinary], projects: [project, related])
+        let lines = String(decoding: data, as: UTF8.self)
+            .replacingOccurrences(of: "\r\n ", with: "")
+            .components(separatedBy: "\r\n")
+        #expect(lines.filter { $0 == "BEGIN:VCARD" }.count == 2)
+        #expect(lines.filter { $0 == "END:VCARD" }.count == 2)
+        #expect(lines.filter { $0 == "VERSION:3.0" }.count == 2)
+        #expect(!lines.contains { $0.contains("\r") || $0.contains("\n") })
+        #expect(lines.contains("FN:张👷🏽‍♀️\\;三\\,四\\\\五\\nTEL:999"))
+        #expect(lines.contains("N:;张👷🏽‍♀️\\;三\\,四\\\\五\\nTEL:999;;;"))
+        #expect(lines.contains("ORG:公司\\nEND:VCARD\\nBEGIN:VCARD"))
+        #expect(lines.contains("TEL;TYPE=CELL:86010123429"))
+        #expect(lines.filter { $0.hasPrefix("TEL;") }.count == 1)
+        #expect(lines.contains("NOTE:一行\\n二行\\n三行\\n四行\\;逗\\,号\\\\n\\nEMAIL:injected@example.test\\nURL:https://injected.invalid/\\nTITLE:Injected\\nADR:\\;\\;Injected Street\\;\\;\\;\\;\\n项目:甲\\nEND:VCARD\\nBEGIN:VCARD\\n历史项目:乙\\;丙\\,丁\\\\工程"))
+        #expect(lines.contains("NOTE:项目:甲\\nEND:VCARD\\nBEGIN:VCARD"))
+        #expect(lines.contains("FN:李工"))
+
+        // Verify the consumer sees literal text, rather than additional vCard properties.
+        let parsed = try CNContactVCardSerialization.contacts(with: data)
+        #expect(parsed.count == 2)
+        let malicious = try #require(parsed.first)
+        #expect(malicious.givenName == "张👷🏽‍♀️;三,四\\五\nTEL:999")
+        #expect(malicious.familyName.isEmpty)
+        #expect(malicious.middleName.isEmpty)
+        #expect(malicious.namePrefix.isEmpty)
+        #expect(malicious.nameSuffix.isEmpty)
+        #expect(malicious.organizationName == "公司\nEND:VCARD\nBEGIN:VCARD")
+        #expect(malicious.note == "一行\n二行\n三行\n四行;逗,号\\n\nEMAIL:injected@example.test\nURL:https://injected.invalid/\nTITLE:Injected\nADR:;;Injected Street;;;;\n项目:甲\nEND:VCARD\nBEGIN:VCARD\n历史项目:乙;丙,丁\\工程")
+        #expect(malicious.phoneNumbers.map { $0.value.stringValue } == ["86010123429"])
+        for value in parsed {
+            #expect(value.emailAddresses.isEmpty)
+            #expect(value.urlAddresses.isEmpty)
+            #expect(value.postalAddresses.isEmpty)
+            #expect(value.jobTitle.isEmpty)
+        }
+        let ordinaryParsed = try #require(parsed.last)
+        #expect(ordinaryParsed.givenName == "李工")
+        #expect(ordinaryParsed.phoneNumbers.isEmpty)
+        #expect(ordinaryParsed.organizationName.isEmpty)
+        #expect(ordinaryParsed.note == "项目:甲\nEND:VCARD\nBEGIN:VCARD")
+    }
+
     @Test(arguments: [false, true])
     func pagingSearchRoleAndRelatedProjects(sqlite: Bool) async throws {
         var snapshot = RepositoryTestFixture.sample()

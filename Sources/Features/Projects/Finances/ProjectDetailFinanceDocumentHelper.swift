@@ -8,12 +8,6 @@ enum ProjectDetailFinanceDocumentHelper {
         return resized.jpegData(compressionQuality: 0.78)
     }
 
-    static func pdfPageCount(_ data: Data) -> Int {
-        guard let provider = CGDataProvider(data: data as CFData),
-              let doc = CGPDFDocument(provider) else { return 1 }
-        return max(doc.numberOfPages, 1)
-    }
-
     static func pdfPageCount(at url: URL) -> Int {
         guard let doc = CGPDFDocument(url as CFURL) else { return 1 }
         return max(doc.numberOfPages, 1)
@@ -30,10 +24,6 @@ enum ProjectDetailFinanceDocumentHelper {
         case .material, .labor, .other:
             return .other
         }
-    }
-
-    static func documentCategory(for financialCategory: String) -> ProjectDocumentCategory {
-        documentCategory(for: StringEnumFallback.value(financialCategory, default: ProjectFinancialCategory.receipt))
     }
 
     static func documentIcon(_ category: ProjectDocumentCategory) -> String {
@@ -69,10 +59,6 @@ enum ProjectDetailFinanceDocumentHelper {
         case .other:
             return "folder.fill"
         }
-    }
-
-    static func documentIcon(_ category: String) -> String {
-        documentIcon(StringEnumFallback.value(category, default: ProjectDocumentCategory.other))
     }
 
     private static func resize(_ image: UIImage, longEdge: CGFloat) -> UIImage {

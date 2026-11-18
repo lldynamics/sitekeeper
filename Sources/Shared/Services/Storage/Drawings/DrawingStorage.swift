@@ -13,10 +13,6 @@ enum DrawingStorage {
         eventPrefix: "drawing"
     )
 
-    private static var drawingDir: URL {
-        fileFamily.directoryURL
-    }
-
     static func saveImportedFileOrThrow(from sourceURL: URL, projectId: UUID) throws -> ProjectDrawing {
         guard let ext = drawingFileExtension(for: sourceURL) else {
             let rawType = sourceURL.pathExtension.lowercased()
@@ -28,7 +24,7 @@ enum DrawingStorage {
         let baseName = sourceURL.deletingPathExtension().lastPathComponent.trimmingCharacters(in: .whitespacesAndNewlines)
         let displayName = baseName.isEmpty ? "图纸" : baseName
         let storedFileName = "\(UUID().uuidString).\(ext)"
-        let targetURL = drawingDir.appendingPathComponent(storedFileName)
+        let targetURL = try validatedFileURL(for: storedFileName)
         try ensureDirectoryExists()
 
         let hasAccess = sourceURL.startAccessingSecurityScopedResource()
@@ -62,7 +58,7 @@ enum DrawingStorage {
             ? "图纸"
             : rawBaseName.trimmingCharacters(in: .whitespacesAndNewlines)
         let storedFileName = "\(UUID().uuidString).\(ext)"
-        let targetURL = drawingDir.appendingPathComponent(storedFileName)
+        let targetURL = try validatedFileURL(for: storedFileName)
         try ensureDirectoryExists()
         do {
             try data.write(to: targetURL, options: .atomic)
@@ -127,6 +123,10 @@ enum DrawingStorage {
         )
     }
 
+    static func validatedFileURL(for fileName: String) throws -> URL {
+        try fileFamily.validatedFileURL(for: fileName)
+    }
+
     static func fileURL(for fileName: String) -> URL {
         fileFamily.fileURL(for: fileName)
     }
@@ -156,10 +156,6 @@ enum DrawingStorage {
 
     static func data(for fileName: String) -> Data? {
         fileFamily.data(for: fileName, failureEvent: "drawing.read_failed")
-    }
-
-    static func dataAsync(for fileName: String) async -> Data? {
-        await fileFamily.dataAsync(for: fileName, failureEvent: "drawing.read_failed")
     }
 
     static func exists(fileName: String) -> Bool {

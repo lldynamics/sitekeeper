@@ -109,11 +109,29 @@ enum DrawingImportCoordinator {
 
         func importDrawing(_ drawing: ProjectDrawing) {
             var versioned = drawing
-            let resolved = ProjectDetailDrawingHelper.resolvedImportMetadata(
+            guard let resolved = ProjectDetailDrawingHelper.resolvedImportMetadata(
                 for: drawing,
                 in: currentDrawings,
                 strategy: strategy
-            )
+            ) else {
+                do {
+                    try DataStoreDeferredFileCleanup.deleteDrawingFilesOrThrow(
+                        [drawing.fileName], summary: "drawing.import_version_cleanup"
+                    )
+                } catch {
+                    StorageIssueLog.recordEvent(
+                        "drawing.import_version_cleanup_failed",
+                        category: .fileStorage,
+                        details: ["file_name": drawing.fileName],
+                        error: error
+                    )
+                }
+                result.failures.append(DrawingImportFailure(
+                    fileName: drawing.name,
+                    reason: AppLocalization.string("图纸版本号已达到上限，无法创建新版本。")
+                ))
+                return
+            }
             versioned.version = resolved.version
             versioned.isCurrentVersion = resolved.isCurrentVersion
 

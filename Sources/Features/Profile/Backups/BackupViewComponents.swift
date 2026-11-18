@@ -24,6 +24,9 @@ struct CloudBackupListRow: View {
                 Text(file.formattedSize)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Text(file.scope?.displayName ?? AppLocalization.string("旧备份（范围未知）"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Text(file.uploadState.statusMessage)
                     .font(.caption)
                     .foregroundStyle(file.uploadState == .uploaded ? Color.appSuccess : Color.appWarning)
@@ -144,12 +147,17 @@ struct BackupImportPreviewView: View {
 
     var body: some View {
         let snapshot = preview.snapshot
+        let filePlan = importMode == .merge ? preview.mergeFilePlan : preview.overwriteFilePlan
+        let blockedReason: String? = if case .failure(let error)? = filePlan { error.localizedDescription } else { nil }
         AppBusinessFormSheet(
             title: AppLocalization.string("确认导入"),
             primaryActionTitle: nil,
             onCancel: onCancel
         ) {
                 Section(AppLocalization.string("导入预览")) {
+                    if let scope = preview.manifest.scope {
+                        LabeledContent(AppLocalization.string("备份范围"), value: scope.displayName)
+                    }
                     LabeledContent(AppLocalization.string("材料"), value: "\(snapshot.materialItems.count) 条")
                     LabeledContent(AppLocalization.string("报价"), value: "\(snapshot.quoteItems.count) 条")
                     LabeledContent(AppLocalization.string("人工记录"), value: "\(snapshot.laborRecords.count) 条")
@@ -167,12 +175,20 @@ struct BackupImportPreviewView: View {
                     LabeledContent(AppLocalization.string("进度任务"), value: "\(snapshot.progressTasks.count) 条")
                     LabeledContent(AppLocalization.string("历史计算"), value: "\(snapshot.historyRecords.count) 条")
                 }
-                BackupFileImpactSectionView(
-                    title: AppLocalization.string("将恢复到本机的原文件"),
-                    summary: preview.incomingFiles,
-                    emptyMessage: AppLocalization.string("该备份不包含独立原文件，导入时只会恢复数据索引。"),
-                    footer: AppLocalization.string("这些原文件会随导入一起恢复到本机。")
-                )
+                if let blockedReason {
+                    Section(AppLocalization.string("将恢复到本机的原文件")) {
+                        Text(blockedReason).foregroundStyle(.appWarning)
+                    }
+                } else {
+                    BackupFileImpactSectionView(
+                        title: AppLocalization.string("将恢复到本机的原文件"),
+                        summary: (try? filePlan?.get()) ?? preview.incomingFiles,
+                        emptyMessage: preview.incomingFiles.isEmpty
+                            ? AppLocalization.string("该备份不包含独立原文件，导入时只会恢复数据索引。")
+                            : AppLocalization.string("所选导入方式无需恢复原文件。"),
+                        footer: nil
+                    )
+                }
                 BackupFileImpactSectionView(
                     title: AppLocalization.string("若选择覆盖，将移除的本机原文件"),
                     summary: preview.overwrittenLocalFiles,
@@ -198,9 +214,11 @@ struct BackupImportPreviewView: View {
                             .fontWeight(.semibold)
                             .tint(.appWarning)
                             .accessibilityIdentifier("backup-import-confirm")
+                            .disabled(blockedReason != nil)
                     } else if isOverwriteImportArmed {
                         Button(AppLocalization.string("确认覆盖导入"), role: .destructive, action: onApplyImport)
                             .accessibilityIdentifier("backup-import-overwrite-confirm")
+                            .disabled(blockedReason != nil)
                         Button(AppLocalization.string("返回合并导入"), role: .cancel) {
                             importMode = .merge
                             isOverwriteImportArmed = false
@@ -212,6 +230,7 @@ struct BackupImportPreviewView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .fontWeight(.semibold)
+                        .disabled(blockedReason != nil)
                     }
                 }
         }

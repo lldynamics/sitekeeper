@@ -50,6 +50,7 @@ enum RecoverableDeletionStorage {
         guard let rootURL = rootURL(named: rootDirectoryName) else {
             throw RecoverableDeletionStorageError.rootUnavailable(rootDirectoryName)
         }
+        try AttachmentStoragePath.validateDirectory(rootURL)
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         return rootURL
     }
@@ -65,6 +66,7 @@ enum RecoverableDeletionStorage {
         ) else {
             throw RecoverableDeletionStorageError.rootUnavailable(rootDirectoryName)
         }
+        try AttachmentStoragePath.validateFile(manifestURL)
         guard FileManager.default.fileExists(atPath: manifestURL.path) else {
             return defaultManifest()
         }
@@ -79,6 +81,7 @@ enum RecoverableDeletionStorage {
     ) throws {
         let rootURL = try createRootDirectory(named: rootDirectoryName)
         let manifestURL = rootURL.appendingPathComponent(manifestFileName)
+        try AttachmentStoragePath.validateFile(manifestURL)
         let data = try JSONEncoder().encode(manifest)
         try data.write(to: manifestURL, options: .atomic)
     }
@@ -125,6 +128,11 @@ enum RecoverableDeletionStorage {
             restoreRootOverride(previous, for: rootDirectoryName)
         }
         return try body()
+    }
+
+    /// Explicit test scopes may bound synthetic source files beside their isolated recovery root.
+    static func rootOverrideForTesting(named rootDirectoryName: String) -> URL? {
+        rootOverrideState.value(for: rootDirectoryName)
     }
 
     private static func rootOverride(for rootDirectoryName: String) -> URL? {

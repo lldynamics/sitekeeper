@@ -1,5 +1,10 @@
 import Foundation
 
+enum CloudBackupScope: String, Sendable {
+    case complete
+    case partial
+}
+
 struct BackupArchiveManifest: Codable, Equatable, Sendable {
     var schemaVersion: Int
     var appVersion: String
@@ -7,6 +12,9 @@ struct BackupArchiveManifest: Codable, Equatable, Sendable {
     var appName: String
     var exportedAt: String
     var metadataPath: String
+    var cloudBackupScope: String?
+
+    var scope: CloudBackupScope? { cloudBackupScope.flatMap(CloudBackupScope.init(rawValue:)) }
 
     init(
         schemaVersion: Int = BackupSnapshot.currentSchemaVersion,
@@ -14,7 +22,8 @@ struct BackupArchiveManifest: Codable, Equatable, Sendable {
         appBuild: String = AppBrand.appBuild,
         appName: String = AppBrand.displayName,
         exportedAt: String = Formatters.now(),
-        metadataPath: String = ""
+        metadataPath: String = "",
+        cloudBackupScope: CloudBackupScope? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.appVersion = appVersion
@@ -22,6 +31,7 @@ struct BackupArchiveManifest: Codable, Equatable, Sendable {
         self.appName = appName
         self.exportedAt = exportedAt
         self.metadataPath = metadataPath
+        self.cloudBackupScope = cloudBackupScope?.rawValue
     }
 }
 
@@ -193,6 +203,7 @@ struct BackupSnapshot: Codable, Sendable {
             legacyDateProvenance = try LegacyDateProvenance.capture(from: decoder)
             schemaVersion = Self.currentSchemaVersion
         }
+        try validateRecordIdentifiers()
     }
 
     func encode(to encoder: Encoder) throws {
@@ -233,5 +244,64 @@ struct BackupSnapshot: Codable, Sendable {
         try container.encode(drawingFiles, forKey: .drawingFiles)
         try container.encode(documentFiles, forKey: .documentFiles)
         try container.encode(quickNoteAttachmentFiles, forKey: .quickNoteAttachmentFiles)
+    }
+}
+
+struct BackupSnapshotIdentifierError: LocalizedError {
+    let collection: String
+
+    var errorDescription: String? {
+        AppLocalization.string("数据包含重复的记录标识，无法安全读取。请使用其他备份。")
+    }
+}
+
+extension BackupSnapshot {
+    /// IDs are unique within each collection, while references and different owners may reuse them.
+    func validateRecordIdentifiers() throws {
+        func requireUnique<T: Identifiable>(_ records: [T], _ collection: String) throws {
+            var seen = Set<T.ID>()
+            for record in records where !seen.insert(record.id).inserted {
+                throw BackupSnapshotIdentifierError(collection: collection)
+            }
+        }
+
+        try requireUnique(materialItems, "materialItems")
+        try requireUnique(quoteItems, "quoteItems")
+        try requireUnique(laborRecords, "laborRecords")
+        try requireUnique(projects, "projects")
+        try requireUnique(dailyLogs, "dailyLogs")
+        try requireUnique(historyRecords, "historyRecords")
+        try requireUnique(progressTasks, "progressTasks")
+        try requireUnique(siteTodos, "siteTodos")
+        try requireUnique(projectDrawings, "projectDrawings")
+        try requireUnique(projectContacts, "projectContacts")
+        try requireUnique(projectFinancialRecords, "projectFinancialRecords")
+        try requireUnique(projectDocuments, "projectDocuments")
+        try requireUnique(quickNotes, "quickNotes")
+        try requireUnique(projectWarehouseMovements, "projectWarehouseMovements")
+        try requireUnique(templates, "templates")
+        try requireUnique(materialPriceEntries, "materialPriceEntries")
+        try requireUnique(materialSheetDrafts, "materialSheetDrafts")
+        try requireUnique(supplierProfiles, "supplierProfiles")
+        try requireUnique(constructionMethods, "constructionMethods")
+        try requireUnique(userMaterials, "userMaterials")
+        try requireUnique(deletedUserMaterials, "deletedUserMaterials")
+
+        for project in projects {
+            try requireUnique(project.paymentPlans, "projects.paymentPlans")
+            try requireUnique(project.changeOrders, "projects.changeOrders")
+            for plan in project.paymentPlans {
+                try requireUnique(plan.installments, "projects.paymentPlans.installments")
+            }
+        }
+        for log in dailyLogs { try requireUnique(log.photos, "dailyLogs.photos") }
+        for todo in siteTodos { try requireUnique(todo.review?.history ?? [], "siteTodos.review.history") }
+        for document in projectDocuments { try requireUnique(document.statusHistory, "projectDocuments.statusHistory") }
+        for note in quickNotes { try requireUnique(note.attachments, "quickNotes.attachments") }
+        for draft in materialSheetDrafts { try requireUnique(draft.items, "materialSheetDrafts.items") }
+        for method in constructionMethods {
+            try requireUnique(method.attachments, "constructionMethods.attachments")
+            try requireUnique(method.tutorialAttachments, "constructionMethods.tutorialAttachments")
+        }
     }
 }

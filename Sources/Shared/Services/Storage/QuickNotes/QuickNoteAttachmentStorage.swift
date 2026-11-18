@@ -30,20 +30,6 @@ enum QuickNoteAttachmentStorage {
         return try saveDataOrThrow(data, fileName: makeFileName(extension: "jpg"))
     }
 
-    static func saveData(_ data: Data, extension ext: String) -> String? {
-        saveData(data, fileName: makeFileName(extension: ext))
-    }
-
-    static func saveData(_ data: Data, fileName: String) -> String? {
-        // 兼容旧调用：新写入流程应优先使用 `saveDataOrThrow`。
-        do {
-            return try saveDataOrThrow(data, fileName: fileName)
-        } catch {
-            DocumentStorageIssueLogger.record("quick_note_attachment.save_failed", fileName: fileName, error: error)
-            return nil
-        }
-    }
-
     static func saveDataOrThrow(_ data: Data, fileName: String) throws -> String {
         defer { StorageThumbnailCache.invalidate(resourceURL: fileURL(for: fileName)) }
         try fileFamily.writeDataOrThrow(data, fileName: fileName)
@@ -53,7 +39,7 @@ enum QuickNoteAttachmentStorage {
     static func importFileOrThrow(from source: URL) throws -> QuickNoteAttachment {
         let ext = source.pathExtension.isEmpty ? "bin" : source.pathExtension.lowercased()
         let fileName = makeFileName(extension: ext)
-        let target = fileURL(for: fileName)
+        let target = try validatedFileURL(for: fileName)
         try ensureDirectoryExists()
         try FileOps.replaceByCopyWithRollback(
             from: source,
@@ -70,7 +56,7 @@ enum QuickNoteAttachmentStorage {
     static func importVideoOrThrow(from source: URL) async throws -> (fileName: String, originalName: String, byteSize: Int, durationSeconds: Double?) {
         let ext = source.pathExtension.isEmpty ? "mov" : source.pathExtension.lowercased()
         let fileName = makeFileName(extension: ext)
-        let target = fileURL(for: fileName)
+        let target = try validatedFileURL(for: fileName)
         try ensureDirectoryExists()
         try FileOps.replaceByCopyWithRollback(
             from: source,
@@ -95,6 +81,10 @@ enum QuickNoteAttachmentStorage {
             }
         }()
         return (fileName, source.lastPathComponent, byteSize, durationSeconds)
+    }
+
+    static func validatedFileURL(for fileName: String) throws -> URL {
+        try fileFamily.validatedFileURL(for: fileName)
     }
 
     static func fileURL(for fileName: String) -> URL {
@@ -161,12 +151,6 @@ enum QuickNoteAttachmentStorage {
     static func delete(fileNames: [String]) {
         for fileName in fileNames {
             delete(fileName: fileName)
-        }
-    }
-
-    static func delete(attachments: [QuickNoteAttachment]) {
-        for attachment in attachments {
-            delete(fileName: attachment.fileName)
         }
     }
 

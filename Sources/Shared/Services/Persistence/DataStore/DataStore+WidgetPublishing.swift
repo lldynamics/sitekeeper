@@ -5,6 +5,7 @@ import WidgetKit
 
 extension DataStore {
     func publishWidgetData() {
+        guard loadState == .ready else { return }
         guard let defaults = UserDefaults(suiteName: WidgetSharedDefaults.suiteName) else { return }
         let widgetData = makeWidgetExportData()
         let data: Data
@@ -28,16 +29,21 @@ extension DataStore {
             $0.status == .active || $0.status == .paused
         }
         let activeProjectIDs = Set(activeProjects.map(\.id))
+        let movementsByProject = Dictionary(
+            grouping: projectWarehouseMovements.filter { activeProjectIDs.contains($0.projectId) },
+            by: \.projectId
+        )
         let stockLines = activeProjects.flatMap {
-            WarehouseStockCalculator.stockLines(for: $0.id, movements: projectWarehouseMovements)
+            WarehouseStockCalculator.stockLines(for: $0.id, movements: movementsByProject[$0.id] ?? [])
         }
         let activeFinancialRecords = projectFinancialRecords.filter {
             activeProjectIDs.contains($0.projectId) && $0.normalizedStatus == .active
         }
+        let financialIDsLinkedFromDocuments = Set(projectDocuments.compactMap(\.linkedFinancialRecordId))
         let missingReceiptCount = activeFinancialRecords.filter { record in
             guard record.requiresAttachment else { return false }
             let linkedByRecord = !record.linkedDocumentIds.isEmpty
-            let linkedByDocument = projectDocuments.contains { $0.linkedFinancialRecordId == record.id }
+            let linkedByDocument = financialIDsLinkedFromDocuments.contains(record.id)
             return !(linkedByRecord || linkedByDocument)
         }.count
         let priceSpikeCount = activeProjects.reduce(0) { count, project in

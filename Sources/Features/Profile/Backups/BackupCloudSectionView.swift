@@ -83,6 +83,9 @@ struct BackupCloudSectionView: View {
             Text(AppLocalization.string("仅在新备份及校验文件确认上传后，才清理超出保留数量的旧备份；等待同步或上传失败的文件会保留。"))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+            Text(AppLocalization.string("额外保留最新一份已上传的完整备份。首次完整备份上传前，范围未知的旧备份会保留。"))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
 
             if cloudAutoInterval != .disabled {
                 Toggle(AppLocalization.string("仅在 Wi‑Fi 下自动备份"), isOn: $cloudAutoBackupRequiresWiFi)

@@ -150,65 +150,6 @@ extension ProjectDetailFinanceDocumentActions {
         return removableFileNames
     }
 
-    @MainActor
-    static func deleteDocument(_ document: ProjectDocument, store: DataStore) {
-        let detailParts = [document.title, document.fileName]
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        let audit = DataStoreDeletionAuditContext(
-            summary: AppLocalization.string("删除票据资料 1 条"),
-            detail: detailParts.joined(separator: " · "),
-            source: "ProjectDetailFinanceDocumentActions"
-        )
-        guard executeDocumentDeletion(
-            ids: Set([document.id]),
-            store: store,
-            documentCleanupMode: .immediate,
-            audit: audit,
-            recordsAuditImmediately: true
-        ) != nil else { return }
-        store.scheduleSave()
-    }
-
-    @MainActor
-    static func deleteFinancialRecords(
-        ids: Set<UUID>,
-        deleteLinkedDocuments: Bool,
-        store: DataStore
-    ) {
-        guard !ids.isEmpty else { return }
-        let recordsToDelete = store.projectFinancialRecords.filter { ids.contains($0.id) }
-        guard !recordsToDelete.isEmpty else { return }
-        let linkedDocumentCount = Set(recordsToDelete.flatMap(\.linkedDocumentIds))
-            .union(
-                Set(
-                    store.projectDocuments.compactMap { document in
-                        guard let linkedId = document.linkedFinancialRecordId, ids.contains(linkedId) else { return nil }
-                        return document.id
-                    }
-                )
-            )
-            .count
-        let financialAudit = DataStoreDeletionAuditContext(
-            summary: deleteLinkedDocuments ? AppLocalization.string("删除账目（含票据）") : AppLocalization.string("删除账目"),
-            detail: String(
-                format: AppLocalization.string("账目 %lld 条，关联票据 %lld 条"),
-                Int64(recordsToDelete.count),
-                Int64(linkedDocumentCount)
-            ),
-            source: "ProjectDetailFinanceDocumentActions"
-        )
-        guard executeFinancialRecordDeletion(
-            ids: ids,
-            deleteLinkedDocuments: deleteLinkedDocuments,
-            store: store,
-            documentCleanupMode: .immediate,
-            financialAudit: financialAudit,
-            recordsAuditImmediately: true
-        ) != nil else { return }
-        store.scheduleSave()
-    }
-
     static func linkedDocuments(for record: ProjectFinancialRecord, documents: [ProjectDocument]) -> [ProjectDocument] {
         guard !record.linkedDocumentIds.isEmpty else { return [] }
         let idSet = Set(record.linkedDocumentIds)

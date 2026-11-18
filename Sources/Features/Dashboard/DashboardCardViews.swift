@@ -23,10 +23,6 @@ enum DashboardSubtitleBuilder {
             .joined(separator: " · ")
     }
 
-    static func moneySummary(_ leading: String, amount: String) -> String {
-        joined([leading, amount])
-    }
-
     static func datedAmount(_ date: String, amount: String, projectName: String? = nil) -> String {
         joined([date, amount, projectName ?? ""])
     }

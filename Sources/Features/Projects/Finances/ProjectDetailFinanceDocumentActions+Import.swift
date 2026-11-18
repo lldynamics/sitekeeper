@@ -116,34 +116,6 @@ extension ProjectDetailFinanceDocumentActions {
     }
 
     @MainActor
-    static func importAttachmentData(
-        _ data: Data,
-        fileExtension: String,
-        title: String,
-        category: ProjectDocumentCategory = .other,
-        note: String,
-        projectId: UUID,
-        linkedFinancialRecordId: UUID?,
-        store: DataStore
-    ) -> String? {
-        switch importAttachmentDocumentData(
-            data,
-            fileExtension: fileExtension,
-            title: title,
-            category: category,
-            note: note,
-            projectId: projectId,
-            linkedFinancialRecordId: linkedFinancialRecordId,
-            store: store
-        ) {
-        case .success:
-            return nil
-        case .failure(let message):
-            return message
-        }
-    }
-
-    @MainActor
     static func importAttachmentDocumentData(
         _ data: Data,
         fileExtension: String,

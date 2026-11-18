@@ -338,7 +338,7 @@ struct ProfileTabView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    profileWorkspaceCard(title: AppLocalization.string("更多设置")) {
+                    profileWorkspaceCard {
                         NavigationLink { SettingsView() } label: {
                             Label(AppLocalization.string("更多设置"), systemImage: "gear")
                                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)

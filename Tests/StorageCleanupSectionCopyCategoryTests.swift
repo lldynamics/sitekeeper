@@ -2,27 +2,57 @@ import Testing
 @testable import sitekeeper
 
 struct StorageCleanupSectionCopyCategoryTests {
-    @Test func categoryCopyIsPresent() {
-        #expect(!StorageCleanupSectionCopy.storageSummaryHeader.isEmpty)
-        #expect(!StorageCleanupSectionCopy.projectCleanupHeader.isEmpty)
-        #expect(!StorageCleanupSectionCopy.noProjectCleanupMessage.isEmpty)
-        #expect(!StorageCleanupSectionCopy.usagePhotoTitle.isEmpty)
-        #expect(!StorageCleanupSectionCopy.usageVideoTitle.isEmpty)
-        #expect(!StorageCleanupSectionCopy.usageDrawingTitle.isEmpty)
-        #expect(!StorageCleanupSectionCopy.usageTicketTitle.isEmpty)
-        #expect(!StorageCleanupSectionCopy.usageDrawingOriginalTitle.isEmpty)
-        #expect(!StorageCleanupSectionCopy.usageTicketDocumentTitle.isEmpty)
-        #expect(!StorageCleanupSectionCopy.usageBackupEstimateTitle.isEmpty)
-        #expect(!StorageCleanupSectionCopy.usageSummaryHeader.isEmpty)
-        #expect(!StorageCleanupSectionCopy.projectTotalUsageTitle.isEmpty)
-        #expect(!StorageCleanupSectionCopy.cleanupByTypeHeader.isEmpty)
-        #expect(!StorageCleanupSectionCopy.cleanupByTypeFooter.isEmpty)
-        #expect(!StorageCleanupSectionCopy.cleanupAllProjectFilesTitle.isEmpty)
-        #expect(!StorageCleanupSectionCopy.backupSpaceNote.isEmpty)
-        #expect(!StorageCleanupSectionCopy.backupEstimateCalculatingText.isEmpty)
-        #expect(!StorageCleanupSectionCopy.storageFileCategoryDisplayName(.photo).isEmpty)
-        #expect(!StorageCleanupSectionCopy.cleanupCategoryDisplayName(.photos).isEmpty)
-        #expect(!StorageCleanupSectionCopy.cleanupCategoryResultTitle(.all).isEmpty)
+    @Test(arguments: [
+        StorageCleanupSectionCopy.auditSummaryRestoreCleanupTrash,
+        StorageCleanupSectionCopy.auditSummaryPermanentlyDeleteCleanupTrash,
+        StorageCleanupSectionCopy.auditSummaryRestoreQuarantinedFile,
+        StorageCleanupSectionCopy.auditSummaryPermanentlyDeleteQuarantinedFile,
+        StorageCleanupSectionCopy.auditSummaryCleanupByProject,
+        StorageCleanupSectionCopy.storageSummaryHeader,
+        StorageCleanupSectionCopy.projectCleanupHeader,
+        StorageCleanupSectionCopy.noProjectCleanupMessage,
+        StorageCleanupSectionCopy.usagePhotoTitle,
+        StorageCleanupSectionCopy.usageVideoTitle,
+        StorageCleanupSectionCopy.usageDrawingTitle,
+        StorageCleanupSectionCopy.usageTicketTitle,
+        StorageCleanupSectionCopy.usageDrawingOriginalTitle,
+        StorageCleanupSectionCopy.usageTicketDocumentTitle,
+        StorageCleanupSectionCopy.usageBackupEstimateTitle,
+        StorageCleanupSectionCopy.usageSummaryHeader,
+        StorageCleanupSectionCopy.projectTotalUsageTitle,
+        StorageCleanupSectionCopy.cleanupByTypeHeader,
+        StorageCleanupSectionCopy.cleanupByTypeFooter,
+        StorageCleanupSectionCopy.cleanupAllProjectFilesTitle,
+        StorageCleanupSectionCopy.backupSpaceNote,
+        StorageCleanupSectionCopy.backupEstimateCalculatingText,
+        StorageCleanupSectionCopy.storageFileCategoryDisplayName(.photo),
+        StorageCleanupSectionCopy.cleanupCategoryDisplayName(.photos),
+        StorageCleanupSectionCopy.cleanupCategoryResultTitle(.all),
+        StorageCleanupSectionCopy.centerNavigationTitle,
+        StorageCleanupSectionCopy.cleanupProjectFilesAlertTitle,
+        StorageCleanupSectionCopy.cancelActionTitle,
+        StorageCleanupSectionCopy.cleanupAllConfirmationButtonTitle,
+        StorageCleanupSectionCopy.cleanupConfirmationNoFileDeletion,
+        StorageCleanupSectionCopy.cleanupConfirmationAffectedRecordsHeader,
+        StorageCleanupSectionCopy.cleanupConfirmationNoRecordChange,
+        StorageCleanupSectionCopy.cleanupConfirmationSampleSeparator,
+        StorageCleanupSectionCopy.backupReminderNoBackup,
+        StorageCleanupSectionCopy.trashRetentionLabel,
+        StorageCleanupSectionCopy.trashPolicyHeader,
+        StorageCleanupSectionCopy.trashPolicyFooter,
+        StorageCleanupSectionCopy.globalTrashHeader,
+        StorageCleanupSectionCopy.emptyTrashMessage,
+        StorageCleanupSectionCopy.restoreActionTitle,
+        StorageCleanupSectionCopy.permanentDeleteActionTitle,
+        StorageCleanupSectionCopy.cleanupBatchLabel,
+        StorageCleanupSectionCopy.quarantinedFileLabel,
+        StorageCleanupSectionCopy.largeFileThresholdLabel,
+        StorageCleanupSectionCopy.largeFileFooter,
+        StorageCleanupSectionCopy.noLargeFilesTitle,
+        StorageCleanupSectionCopy.noLargeFilesDescription,
+    ])
+    func copyIsPresent(_ value: String) {
+        #expect(!value.isEmpty)
     }
 
     @Test func categoryDynamicCopyIncludesExpectedValues() {

@@ -38,6 +38,9 @@ final class DataStore {
 
     let storeURL: URL
     let persistenceActor: DataStorePersistenceActor
+    @ObservationIgnored var mutationRevision: UInt64 = 0
+    @ObservationIgnored var lastPersistedMutationRevision: UInt64 = 0
+    var hasUnpersistedMutations: Bool { mutationRevision > lastPersistedMutationRevision }
     var latestPersistToken = 0
     var persistTask: Task<Void, Never>?
     var initialLoadTask: Task<Void, Never>?
@@ -67,7 +70,6 @@ final class DataStore {
         persistenceActor = DataStorePersistenceActor(storeURL: storeURL)
         mutationSink.owner = self
         loadAsync()
-        publishWidgetData()
     }
 }
 
@@ -85,6 +87,7 @@ final class DomainStoreMutationSink {
         guard let owner else { return }
         owner.invalidateDataHealthScan()
         guard owner.loadState == .ready, !owner.isApplyingBackup, !owner.isApplyingSnapshot else { return }
+        owner.mutationRevision &+= 1
         owner.scheduleSave()
     }
 }

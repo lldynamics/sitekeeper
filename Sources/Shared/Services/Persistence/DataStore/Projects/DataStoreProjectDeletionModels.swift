@@ -38,8 +38,4 @@ struct DataStoreProjectDeletionResult {
     func recordAuditSucceeded() {
         audit?.record(outcome: .succeeded)
     }
-
-    func recordAuditCancelled() {
-        audit?.record(outcome: .cancelled)
-    }
 }

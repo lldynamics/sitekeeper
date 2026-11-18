@@ -1,7 +1,7 @@
 import XCTest
 
 @MainActor
-final class RepositoryWarehouseUITests: XCTestCase {
+final class RepositoryWarehouseUITests: RepositoryUITestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
     func testPagingEditingStockRestartAndOriginalIsolation() {
@@ -35,7 +35,7 @@ final class RepositoryWarehouseUITests: XCTestCase {
         XCTAssertTrue(app.buttons["repository-stock-entry"].waitForExistence(timeout: 8))
         app.buttons["repository-stock-entry"].tap()
         searchStock(app, "仓储材料 052", balance: "3.00")
-        capture(app, "candidate-stock-after-edit")
+        attachScreenshot(app, named: "candidate-stock-after-edit")
         app.terminate()
         _ = launch(reset: false, app: app)
         openLauncher(app)
@@ -91,7 +91,7 @@ final class RepositoryWarehouseUITests: XCTestCase {
         app.buttons["repository-stock-entry"].tap()
         searchStock(app, "独立仓储新增", balance: "-1.25")
         XCTAssertTrue(app.staticTexts["负库存，请核对出入库记录。"].exists)
-        capture(app, "candidate-stock-negative-quantity")
+        attachScreenshot(app, named: "candidate-stock-negative-quantity")
     }
 
     private func clearSearch(_ app: XCUIApplication) {
@@ -114,29 +114,12 @@ final class RepositoryWarehouseUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["库存 " + balance].waitForExistence(timeout: 8))
     }
 
-    private func capture(_ app: XCUIApplication, _ name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
-    }
-
     private func launch(reset: Bool, app: XCUIApplication = XCUIApplication()) -> XCUIApplication {
         app.launchArguments = ["-uitest-skip-onboarding", "-languageCode", "zh-Hans", "-AppleLanguages", "(zh-Hans)"]
         app.launchEnvironment = ["UITEST_SKIP_ONBOARDING": "1"]
         if reset { app.launchEnvironment.merge(["UITEST_RESET_STATE": "1", "UITEST_REPOSITORY_FIXTURE": "1", "UITEST_REPOSITORY_WAREHOUSE_FIXTURE": "1"]) { _, new in new } }
         app.launch()
         return app
-    }
-
-    private func openLauncher(_ app: XCUIApplication) {
-        let tab = app.tabBars.buttons["我的"]
-        let profile = tab.exists ? tab : app.buttons["primary-module-profile"]
-        XCTAssertTrue(profile.waitForExistence(timeout: 10))
-        profile.tap()
-        tapAfterScrolling(app.buttons["profile-settings-link"], app: app)
-        tapAfterScrolling(app.buttons["repository-workspace-entry"], app: app)
-        XCTAssertTrue(app.buttons["repository-workspace-create"].waitForExistence(timeout: 8))
     }
 
     private func openWarehouse(_ app: XCUIApplication) {
@@ -147,14 +130,5 @@ final class RepositoryWarehouseUITests: XCTestCase {
         XCTAssertTrue(entry.waitForExistence(timeout: 8))
         entry.tap()
         XCTAssertTrue(app.buttons["repository-warehouse-create"].waitForExistence(timeout: 8))
-    }
-
-    private func tapAfterScrolling(_ element: XCUIElement, app: XCUIApplication) {
-        for _ in 0..<8 {
-            if element.exists && element.isHittable { element.tap()
-            return }
-            app.swipeUp()
-        }
-        XCTFail("Missing entry: \(element)")
     }
 }

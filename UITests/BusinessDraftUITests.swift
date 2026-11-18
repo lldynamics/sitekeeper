@@ -122,7 +122,7 @@ extension SitekeeperUITests {
         assertBusinessDraftValue(recoveredNote, equals: noteText)
         attachScreenshot(app, named: "Exact financial draft values recovered after restart")
 
-        let amountToFinish = businessDraftField(app, identifier: "finance-draft-amount")
+        let amountToFinish = visibleFinancialDraftAmount(app)
         amountToFinish.tap()
         amountToFinish.typeText("34")
         assertBusinessDraftValue(amountToFinish, equals: "12.34")
@@ -385,6 +385,18 @@ extension SitekeeperUITests {
         XCTAssertTrue(field.exists)
         XCTAssertTrue(field.isHittable)
         return field
+    }
+
+    private func visibleFinancialDraftAmount(_ app: XCUIApplication) -> XCUIElement {
+        let identifier = "finance-draft-amount"
+        let amount = businessDraftField(app, identifier: identifier)
+        let navigationBar = app.navigationBars["项目记账"]
+        // XCTest can report the amount as hittable while it is clipped under the navigation bar.
+        if amount.frame.minY < navigationBar.frame.maxY {
+            app.collectionViews.containing(.textField, identifier: identifier).firstMatch.swipeDown()
+            XCTAssertGreaterThanOrEqual(amount.frame.minY, navigationBar.frame.maxY)
+        }
+        return amount
     }
 
     private func assertBusinessDraftValue(_ field: XCUIElement, equals value: String, line: UInt = #line) {

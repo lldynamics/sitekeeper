@@ -58,6 +58,8 @@ def test_evidence(text):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, help="New directory below build/unit-conversion-host")
+    parser.add_argument("--no-nested-sandbox", action="store_true",
+                        help="Disable only SwiftPM's nested sandbox when the outer managed environment rejects it")
     args = parser.parse_args()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output = (args.output or EVIDENCE_ROOT / (stamp + "-" + uuid.uuid4().hex[:8])).resolve()
@@ -80,7 +82,10 @@ def main():
         "--config-path", str(output / "config"),
         "--security-path", str(output / "security"),
         "--disable-automatic-resolution",
+        "--filter", "UnitConverterTests|UnitConversionContractTests",
     ]
+    if args.no_nested_sandbox:
+        command.append("--disable-sandbox")
     toolchain = subprocess.run([swift, "--version"], capture_output=True, text=True, check=True)
     receipt = {
         "startedAtUTC": datetime.now(timezone.utc).isoformat(),

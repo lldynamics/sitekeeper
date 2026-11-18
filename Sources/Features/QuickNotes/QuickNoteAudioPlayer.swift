@@ -92,8 +92,8 @@ struct QuickNoteAudioPlayer: View {
             let audioPlayer = try AVAudioPlayer(contentsOf: url)
             audioPlayer.prepareToPlay()
             player = audioPlayer
-            duration = audioPlayer.duration
-            currentTime = audioPlayer.currentTime
+            duration = Self.safeTime(audioPlayer.duration)
+            currentTime = min(Self.safeTime(audioPlayer.currentTime), duration)
         } catch {
             player = nil
         }
@@ -114,8 +114,9 @@ struct QuickNoteAudioPlayer: View {
     }
 
     private func seek(to value: Double) {
-        player?.currentTime = value
-        currentTime = value
+        let safeValue = min(Self.safeTime(value), duration)
+        player?.currentTime = safeValue
+        currentTime = safeValue
     }
 
     private func startTimer() {
@@ -123,10 +124,10 @@ struct QuickNoteAudioPlayer: View {
         timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
             Task { @MainActor in
                 guard timer != nil, let player else { return }
-                currentTime = player.currentTime
+                currentTime = min(Self.safeTime(player.currentTime), duration)
                 if !player.isPlaying || player.currentTime >= player.duration {
                     isPlaying = false
-                    currentTime = min(player.currentTime, player.duration)
+                    currentTime = min(Self.safeTime(player.currentTime), duration)
                     stopTimer()
                     if player.currentTime >= player.duration {
                         player.currentTime = 0
@@ -150,7 +151,14 @@ struct QuickNoteAudioPlayer: View {
     }
 
     private func formatTime(_ seconds: Double) -> String {
-        let value = max(Int(seconds), 0)
-        return String(format: "%02d:%02d", value / 60, value % 60)
+        guard seconds.isFinite, seconds >= 0,
+              let value = Int(exactly: seconds.rounded(.towardZero)) else { return "00:00" }
+        return String(format: "%02lld:%02lld", Int64(value / 60), Int64(value % 60))
+    }
+
+    static func safeTime(_ seconds: Double) -> Double {
+        guard seconds.isFinite, seconds >= 0,
+              Int(exactly: seconds.rounded(.towardZero)) != nil else { return 0 }
+        return seconds
     }
 }

@@ -1,5 +1,7 @@
 import Testing
 import Foundation
+import AVFoundation
+import UIKit
 @testable import sitekeeper
 
 @MainActor
@@ -106,6 +108,203 @@ struct QuickNoteImportTests {
         )
 
         #expect(!QuickNoteAttachmentStorage.exists(fileName: fileName))
+    }
+
+    @Test func videoThumbnailCachePreservesLegacyCollisionAndImportedBusinessAttachment() async throws {
+        let manager = FileManager.default
+        let namespace = "test-\(UUID().uuidString)"
+        let temporary = manager.temporaryDirectory.appendingPathComponent(namespace, isDirectory: true)
+        try manager.createDirectory(at: temporary, withIntermediateDirectories: true)
+        let cacheDirectory = try QuickNoteAttachmentStorage.videoThumbnailCacheDirectory(cacheNamespace: namespace)
+        let videoName = "video-cache-\(UUID().uuidString).mov"
+        let legacyName = QuickNoteAttachmentStorage.videoThumbnailFileName(for: videoName)
+        var createdAttachments: [URL] = []
+        defer {
+            createdAttachments.forEach { try? manager.removeItem(at: $0) }
+            try? manager.removeItem(at: cacheDirectory)
+            try? manager.removeItem(at: temporary)
+        }
+
+        let videoURL = temporary.appendingPathComponent("fixture.mov")
+        try await writeThumbnailTestVideo(at: videoURL)
+        let videoData = try Data(contentsOf: videoURL)
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(videoData, fileName: videoName)
+        createdAttachments.append(try QuickNoteAttachmentStorage.validatedFileURL(for: videoName))
+
+        // A valid image under the old derived name must neither be used nor overwritten.
+        let legacyImage = UIGraphicsImageRenderer(size: CGSize(width: 9, height: 7)).image { context in
+            UIColor.blue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 9, height: 7))
+        }
+        let legacyData = try #require(legacyImage.jpegData(compressionQuality: 0.8))
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(legacyData, fileName: legacyName)
+        createdAttachments.append(try QuickNoteAttachmentStorage.validatedFileURL(for: legacyName))
+        let contractData = Data("%PDF-1.4 business attachment".utf8)
+        let contractSource = temporary.appendingPathComponent("thumb-contract.pdf")
+        try contractData.write(to: contractSource)
+        let contract = try QuickNoteAttachmentStorage.importFileOrThrow(from: contractSource)
+        createdAttachments.append(try QuickNoteAttachmentStorage.validatedFileURL(for: contract.fileName))
+        #expect(contract.originalName == "thumb-contract.pdf")
+        let prefixedBusinessName = "thumb-contract-\(UUID().uuidString).pdf"
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(contractData, fileName: prefixedBusinessName)
+        createdAttachments.append(try QuickNoteAttachmentStorage.validatedFileURL(for: prefixedBusinessName))
+        #expect(QuickNoteAttachmentStorage.thumbnailCacheUsageBytes(cacheNamespace: namespace) == 0)
+
+        let thumbnail = try #require(QuickNoteAttachmentStorage.videoThumbnail(for: videoName, cacheNamespace: namespace))
+        #expect(thumbnail.cgImage?.width == 32)
+        #expect(thumbnail.cgImage?.height == 32)
+        let cachedURL = try QuickNoteAttachmentStorage.validatedVideoThumbnailCacheURL(for: videoName, cacheNamespace: namespace)
+        #expect(cachedURL.deletingLastPathComponent() == cacheDirectory)
+        let cachedData = try Data(contentsOf: cachedURL)
+        #expect(UIImage(data: cachedData) != nil)
+        #expect(QuickNoteAttachmentStorage.thumbnailCacheUsageBytes(cacheNamespace: namespace) == cachedData.count)
+        #expect(QuickNoteAttachmentStorage.data(for: legacyName) == legacyData)
+        #expect(QuickNoteAttachmentStorage.data(for: contract.fileName) == contractData)
+
+        let videoKey = ThumbnailCacheKey(resourceURL: QuickNoteAttachmentStorage.fileURL(for: videoName),
+                                         maxPixelSize: 512, variant: "video")
+        let decoded = DecodedThumbnail(image: try #require(thumbnail.cgImage))
+        #expect(await StorageThumbnailCache.image(for: videoKey) { decoded } != nil)
+        #expect(StorageThumbnailCache.cachedImage(for: videoKey) != nil)
+        QuickNoteAttachmentStorage.clearThumbnailCache(cacheNamespace: namespace)
+        #expect(StorageThumbnailCache.cachedImage(for: videoKey) == nil)
+        #expect(!manager.fileExists(atPath: cachedURL.path))
+        #expect(QuickNoteAttachmentStorage.thumbnailCacheUsageBytes(cacheNamespace: namespace) == 0)
+        #expect(QuickNoteAttachmentStorage.data(for: videoName) == videoData)
+        #expect(QuickNoteAttachmentStorage.data(for: legacyName) == legacyData)
+        #expect(QuickNoteAttachmentStorage.data(for: contract.fileName) == contractData)
+        #expect(QuickNoteAttachmentStorage.data(for: prefixedBusinessName) == contractData)
+
+        // A cache-file symlink cannot redirect reads, writes or deletion into an attachment.
+        let legacyURL = try QuickNoteAttachmentStorage.validatedFileURL(for: legacyName)
+        try manager.createSymbolicLink(at: cachedURL, withDestinationURL: legacyURL)
+        let uncachedThumbnail = try #require(QuickNoteAttachmentStorage.videoThumbnail(for: videoName, cacheNamespace: namespace))
+        #expect(uncachedThumbnail.cgImage?.width == 32)
+        QuickNoteAttachmentStorage.clearThumbnailCache(cacheNamespace: namespace)
+        #expect(try manager.destinationOfSymbolicLink(atPath: cachedURL.path) == legacyURL.path)
+        #expect(QuickNoteAttachmentStorage.data(for: legacyName) == legacyData)
+        try manager.removeItem(at: cachedURL)
+        // Rendering can repopulate the isolated cache after a purge.
+        #expect(QuickNoteAttachmentStorage.videoThumbnail(for: videoName, cacheNamespace: namespace) != nil)
+        #expect(manager.fileExists(atPath: cachedURL.path))
+    }
+
+    @Test func videoThumbnailCacheVersionsSameNameAtomicVideoReplacements() async throws {
+        let manager = FileManager.default
+        let namespace = "test-\(UUID().uuidString)"
+        let temporary = manager.temporaryDirectory.appendingPathComponent(namespace, isDirectory: true)
+        try manager.createDirectory(at: temporary, withIntermediateDirectories: true)
+        let cacheDirectory = try QuickNoteAttachmentStorage.videoThumbnailCacheDirectory(cacheNamespace: namespace)
+        let fileName = "versioned-video-\(UUID().uuidString).mov"
+        let sourceURL = try QuickNoteAttachmentStorage.validatedFileURL(for: fileName)
+        defer {
+            try? manager.removeItem(at: sourceURL)
+            try? manager.removeItem(at: cacheDirectory)
+            try? manager.removeItem(at: temporary)
+        }
+        let firstVideo = temporary.appendingPathComponent("first.mov")
+        try await writeThumbnailTestVideo(at: firstVideo)
+        let originalData = try Data(contentsOf: firstVideo)
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(originalData, fileName: fileName)
+        let originalAttributes = try manager.attributesOfItem(atPath: sourceURL.path)
+        let originalDate = try #require(originalAttributes[.modificationDate] as? Date)
+        let originalInode = try #require(originalAttributes[.systemFileNumber] as? NSNumber)
+        let originalThumbnail = try #require(QuickNoteAttachmentStorage.videoThumbnail(for: fileName, cacheNamespace: namespace))
+        let originalKey = try QuickNoteAttachmentStorage.validatedVideoThumbnailCacheURL(for: fileName, cacheNamespace: namespace)
+
+        // Backup replacement can preserve both file size and modification time. Its new
+        // inode must still select a new key, without hashing the entire video on reads.
+        try originalData.write(to: sourceURL, options: .atomic)
+        try manager.setAttributes([.modificationDate: originalDate], ofItemAtPath: sourceURL.path)
+        let replacementAttributes = try manager.attributesOfItem(atPath: sourceURL.path)
+        #expect(replacementAttributes[.systemFileNumber] as? NSNumber != originalInode)
+        #expect(replacementAttributes[.size] as? NSNumber == originalAttributes[.size] as? NSNumber)
+        let sameContentKey = try QuickNoteAttachmentStorage.validatedVideoThumbnailCacheURL(for: fileName, cacheNamespace: namespace)
+        #expect(sameContentKey != originalKey)
+        #expect(QuickNoteAttachmentStorage.videoThumbnail(for: fileName, cacheNamespace: namespace) != nil)
+        #expect(manager.fileExists(atPath: sameContentKey.path))
+
+        let secondVideo = temporary.appendingPathComponent("second.mov")
+        try await writeThumbnailTestVideo(at: secondVideo, width: 64, height: 48, channel: 0xFF)
+        let secondData = try Data(contentsOf: secondVideo)
+        try secondData.write(to: sourceURL, options: .atomic)
+        try manager.setAttributes([.modificationDate: originalDate], ofItemAtPath: sourceURL.path)
+        let changedKey = try QuickNoteAttachmentStorage.validatedVideoThumbnailCacheURL(for: fileName, cacheNamespace: namespace)
+        #expect(changedKey != sameContentKey)
+        let changedThumbnail = try #require(QuickNoteAttachmentStorage.videoThumbnail(for: fileName, cacheNamespace: namespace))
+        #expect(changedThumbnail.cgImage?.width == 64)
+        #expect(changedThumbnail.cgImage?.height == 48)
+        #expect(try thumbnailTestPixel(changedThumbnail) != thumbnailTestPixel(originalThumbnail))
+        #expect(manager.fileExists(atPath: changedKey.path))
+
+        try manager.setAttributes([.posixPermissions: 0], ofItemAtPath: sourceURL.path)
+        #expect(QuickNoteAttachmentStorage.videoThumbnail(for: fileName, cacheNamespace: namespace) == nil)
+        try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: sourceURL.path)
+        // Removing the source must not resurrect an old cached image.
+        try manager.removeItem(at: sourceURL)
+        #expect(QuickNoteAttachmentStorage.videoThumbnail(for: fileName, cacheNamespace: namespace) == nil)
+        #expect(throws: (any Error).self) {
+            try QuickNoteAttachmentStorage.validatedVideoThumbnailCacheURL(for: fileName, cacheNamespace: namespace)
+        }
+        // Neither a source symlink nor a non-video replacement may reuse the earlier key.
+        try manager.createSymbolicLink(at: sourceURL, withDestinationURL: secondVideo)
+        #expect(QuickNoteAttachmentStorage.videoThumbnail(for: fileName, cacheNamespace: namespace) == nil)
+        try manager.removeItem(at: sourceURL)
+        try Data("ordinary document".utf8).write(to: sourceURL, options: .atomic)
+        #expect(QuickNoteAttachmentStorage.videoThumbnail(for: fileName, cacheNamespace: namespace) == nil)
+        #expect(QuickNoteAttachmentStorage.data(for: fileName) == Data("ordinary document".utf8))
+    }
+
+    @Test func videoThumbnailCacheRejectsTraversalAndSymlinkEntries() throws {
+        let manager = FileManager.default
+        let namespace = "test-\(UUID().uuidString)"
+        let temporary = manager.temporaryDirectory.appendingPathComponent(namespace, isDirectory: true)
+        try manager.createDirectory(at: temporary, withIntermediateDirectories: true)
+        let cacheDirectory = try QuickNoteAttachmentStorage.videoThumbnailCacheDirectory(cacheNamespace: namespace)
+        try manager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        defer {
+            try? manager.removeItem(at: cacheDirectory)
+            try? manager.removeItem(at: temporary)
+        }
+        let outside = temporary.appendingPathComponent("business.pdf")
+        let data = Data("preserve external business data".utf8)
+        try data.write(to: outside)
+        let sourceName = "cache-boundary-\(UUID().uuidString).mov"
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(data, fileName: sourceName)
+        let sourceURL = try QuickNoteAttachmentStorage.validatedFileURL(for: sourceName)
+        defer { try? manager.removeItem(at: sourceURL) }
+        // A regular attachment containing non-video bytes cannot produce a video preview.
+        #expect(QuickNoteAttachmentStorage.videoThumbnail(for: sourceName, cacheNamespace: namespace) == nil)
+        let cacheEntry = try QuickNoteAttachmentStorage.validatedVideoThumbnailCacheURL(for: sourceName, cacheNamespace: namespace)
+        try manager.createSymbolicLink(at: cacheEntry, withDestinationURL: outside)
+        #expect(throws: (any Error).self) {
+            try QuickNoteAttachmentStorage.validatedVideoThumbnailCacheURL(for: sourceName, cacheNamespace: namespace)
+        }
+        #expect(QuickNoteAttachmentStorage.thumbnailCacheUsageBytes(cacheNamespace: namespace) == 0)
+        QuickNoteAttachmentStorage.clearThumbnailCache(cacheNamespace: namespace)
+        #expect(try Data(contentsOf: outside) == data)
+        #expect(try manager.destinationOfSymbolicLink(atPath: cacheEntry.path) == outside.path)
+
+        for invalid in ["..", "../outside", "/tmp/outside", "nested/cache", "nested\\cache"] {
+            #expect(throws: (any Error).self) {
+                try QuickNoteAttachmentStorage.videoThumbnailCacheDirectory(cacheNamespace: invalid)
+            }
+            #expect(throws: (any Error).self) {
+                try QuickNoteAttachmentStorage.validatedVideoThumbnailCacheURL(for: invalid, cacheNamespace: namespace)
+            }
+        }
+
+        // Replacing a namespace directory with a symlink must also fail closed.
+        let linkedNamespace = "test-link-\(UUID().uuidString)"
+        let linkedDirectory = try QuickNoteAttachmentStorage.videoThumbnailCacheDirectory(cacheNamespace: linkedNamespace)
+        try manager.createSymbolicLink(at: linkedDirectory, withDestinationURL: temporary)
+        defer { try? manager.removeItem(at: linkedDirectory) }
+        #expect(throws: (any Error).self) {
+            try QuickNoteAttachmentStorage.videoThumbnailCacheDirectory(cacheNamespace: linkedNamespace)
+        }
+        #expect(QuickNoteAttachmentStorage.thumbnailCacheUsageBytes(cacheNamespace: linkedNamespace) == 0)
+        QuickNoteAttachmentStorage.clearThumbnailCache(cacheNamespace: linkedNamespace)
+        #expect(try Data(contentsOf: outside) == data)
     }
 
     @Test func audioRecorderRejectsDeniedMicrophonePermission() async {
@@ -320,4 +519,57 @@ private final class FakeQuickNoteAudioFileStore: QuickNoteAudioRecordingFileStor
     func deleteRecording(fileName: String, summary: String) {
         deletedRecordings.append((fileName, summary))
     }
+}
+
+// Generate a real, short H.264 video instead of accepting invalid bytes as thumbnail coverage.
+@MainActor
+private func writeThumbnailTestVideo(at url: URL, width: Int = 32, height: Int = 32, channel: UInt8 = 0x7F) async throws {
+    let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+    let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+        AVVideoCodecKey: AVVideoCodecType.h264,
+        AVVideoWidthKey: width,
+        AVVideoHeightKey: height
+    ])
+    let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB,
+        kCVPixelBufferWidthKey as String: width,
+        kCVPixelBufferHeightKey as String: height
+    ])
+    try #require(writer.canAdd(input))
+    writer.add(input)
+    try #require(writer.startWriting())
+    writer.startSession(atSourceTime: .zero)
+    var buffer: CVPixelBuffer?
+    let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32ARGB, nil, &buffer)
+    try #require(status == kCVReturnSuccess)
+    let pixels = try #require(buffer)
+    CVPixelBufferLockBaseAddress(pixels, [])
+    let base = try #require(CVPixelBufferGetBaseAddress(pixels))
+    base.initializeMemory(as: UInt8.self, repeating: channel, count: CVPixelBufferGetBytesPerRow(pixels) * height)
+    CVPixelBufferUnlockBaseAddress(pixels, [])
+    for frame in 0..<2 {
+        let deadline = Date().addingTimeInterval(5)
+        while !input.isReadyForMoreMediaData, Date() < deadline, writer.status == .writing {
+            await Task.yield()
+        }
+        try #require(input.isReadyForMoreMediaData)
+        try #require(adaptor.append(pixels, withPresentationTime: CMTime(value: Int64(frame), timescale: 30)))
+    }
+    input.markAsFinished()
+    await writer.finishWriting()
+    try #require(writer.status == .completed)
+}
+
+private func thumbnailTestPixel(_ image: UIImage) throws -> [UInt8] {
+    let cgImage = try #require(image.cgImage)
+    var pixel = [UInt8](repeating: 0, count: 4)
+    try pixel.withUnsafeMutableBytes { bytes in
+        let context = try #require(CGContext(
+            data: bytes.baseAddress, width: 1, height: 1, bitsPerComponent: 8,
+            bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+    }
+    return pixel
 }

@@ -18,12 +18,17 @@ extension ReportBuilder {
         progress: ((ProjectPackageExportProgress) -> Void)? = nil,
         shouldCancel: (() -> Bool)? = nil
     ) throws -> URL {
+        let sourceReferences = projectPackageSourceReferences(
+            documents: documents, drawings: drawings, logs: logs,
+            quickNotes: quickNotes, todos: todos
+        )
+        // Missing files remain reportable; unsafe metadata or a link/directory
+        // target stops the export before reports or temporary files are generated.
+        for reference in sourceReferences { _ = try reference.validatedFileURL() }
         let totalSteps = estimatedProjectPackageStepCount(
-            documents: documents,
-            drawings: drawings,
-            logs: logs,
-            quickNotes: quickNotes,
-            contacts: contacts
+            sourceReferenceCount: sourceReferences.count,
+            hasQuickNotes: !quickNotes.isEmpty,
+            hasContacts: !contacts.isEmpty
         )
         var completedSteps = 0
         func failIfCancelled() throws {
@@ -74,79 +79,96 @@ extension ReportBuilder {
         var writerFinished = false
         defer {
             if !writerFinished {
-                do {
-                    try zip.close()
-                } catch {
-                    recordPackageIssue(
-                        "project_package.close_zip_failed",
-                        details: ["archive_file": packageURL.lastPathComponent],
-                        error: error
-                    )
-                }
-                do {
-                    _ = try FileOps.removeIfExists(
-                        at: packageURL,
-                        context: .init(
-                            event: "project_package.cleanup_temporary_zip",
-                            category: .zipArchive,
-                            source: "ReportBuilder.exportProjectPackage"
-                        )
-                    )
-                } catch {
-                    recordPackageIssue(
-                        "project_package.cleanup_temporary_zip_failed",
-                        details: ["archive_file": packageURL.lastPathComponent],
-                        error: error
-                    )
-                }
+                cleanupIncompleteProjectPackageZip(&zip, at: packageURL, recordIssue: recordPackageIssue)
             }
         }
 
         let folder = safeZipName(project.name, fallback: "untitled_project")
-        let deliveryDirectory = ProjectPackageSchema.deliveryDirectory
-        let documentDirectory = ProjectPackageSchema.documentDirectory
-        let drawingDirectory = ProjectPackageSchema.drawingDirectory
-        let photoDirectory = ProjectPackageSchema.photoDirectory
-        let quickNoteDirectory = ProjectPackageSchema.quickNoteDirectory
-        let contactDirectory = ProjectPackageSchema.contactDirectory
-        let pdfName = ProjectPackageSchema.pdfFileName(folder: folder)
-        let checklistFileName = ProjectPackageSchema.checklistFileName
-        let deliveryHealth = projectDeliveryHealthReport(
+        let context = ProjectPackageStageContext(
+            project: project,
+            folder: folder,
+            failIfCancelled: failIfCancelled,
+            reportProgress: reportProgress,
+            recordPackageIssue: recordPackageIssue
+        )
+        var stagedRawBytes = 0
+        try writeProjectPackageGeneratedReports(
+            zip: &zip,
+            stagedRawBytes: &stagedRawBytes,
+            context: context,
+            packagePDF: packagePDF,
+            logs: logs,
+            drawings: drawings,
+            contacts: contacts,
             financialRecords: financialRecords,
             documents: documents,
-            drawings: drawings,
             todos: todos,
-            logs: logs,
             quickNotes: quickNotes
         )
-        let documentChecklist = DocumentArchiveChecklistSnapshot(
-            documents: documents,
-            requiredCategories: project.requiredDocumentCategories
+        try writeProjectPackageStoredAssets(
+            zip: &zip,
+            stagedRawBytes: &stagedRawBytes,
+            context: context,
+            references: sourceReferences
         )
+        try writeProjectPackageQuickNotesAndContacts(
+            zip: &zip,
+            stagedRawBytes: &stagedRawBytes,
+            context: context,
+            quickNotes: quickNotes,
+            contacts: contacts
+        )
+
+        let finishedURL = try zip.finish()
+        writerFinished = true
+        return finishedURL
+    }
+
+    private struct ProjectPackageStageContext {
+        let project: Project
+        let folder: String
+        let failIfCancelled: () throws -> Void
+        let reportProgress: (String) -> Void
+        let recordPackageIssue: (String, [String: String], Error?) -> Void
+    }
+
+    private static func cleanupIncompleteProjectPackageZip(
+        _ zip: inout StreamingZipArchiveWriter,
+        at packageURL: URL,
+        recordIssue: (String, [String: String], Error?) -> Void
+    ) {
+        do {
+            try zip.close()
+        } catch {
+            recordIssue("project_package.close_zip_failed", ["archive_file": packageURL.lastPathComponent], error)
+        }
+        do {
+            _ = try FileOps.removeIfExists(
+                at: packageURL,
+                context: .init(
+                    event: "project_package.cleanup_temporary_zip",
+                    category: .zipArchive,
+                    source: "ReportBuilder.exportProjectPackage"
+                )
+            )
+        } catch {
+            recordIssue("project_package.cleanup_temporary_zip_failed", ["archive_file": packageURL.lastPathComponent], error)
+        }
+    }
+
+    private static func makeProjectPackageReadmeText(
+        project: Project,
+        deliveryHealth: ProjectDeliveryPackageHealthReport,
+        documentChecklist: DocumentArchiveChecklistSnapshot,
+        drawings: [ProjectDrawing],
+        todos: [SiteTodo],
+        pdfName: String
+    ) -> String {
+        let deliveryDirectory = ProjectPackageSchema.deliveryDirectory
         let currentDrawings = currentProjectPackageDrawings(drawings)
         let missingDrawingOriginalEntries = projectPackageMissingDrawingEntries(drawings)
         let openDrawingIssues = projectPackageOpenDrawingIssueRows(drawings: drawings, todos: todos)
-        let preDeliveryInspection = projectPreDeliveryInspectionTSVText(
-            project: project,
-            financialRecords: financialRecords,
-            documents: documents,
-            drawings: drawings,
-            todos: todos,
-            logs: logs,
-            quickNotes: quickNotes,
-            backupState: deliveryHealth.backupState
-        )
-        var stagedRawBytes = 0
-        try failIfCancelled()
-        try addGeneratedFileToProjectPackageZip(
-            zip: &zip,
-            data: packagePDF,
-            path: "\(folder)/\(deliveryDirectory)/\(pdfName)",
-            stagedRawBytes: &stagedRawBytes
-        )
-        reportProgress(loc("写入交付包 PDF"))
-
-        let readme = [
+        return [
             tsv(["schema_version", ProjectPackageSchema.version]),
             tsv(["package_type", ProjectPackageSchema.type]),
             tsv(["project_name", project.name]),
@@ -177,29 +199,68 @@ extension ReportBuilder {
             "[contents]",
             tsv(["path", "kind_raw", "kind_display"]),
             tsv(["\(deliveryDirectory)/\(pdfName)", "project_delivery_pdf", loc("项目交付包 PDF")]),
-            tsv(["\(deliveryDirectory)/\(checklistFileName)", "delivery_checklist", loc("交付检查清单")]),
+            tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.checklistFileName)", "delivery_checklist", loc("交付检查清单")]),
             tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.preDeliveryInspectionFileName)", "pre_delivery_inspection", loc("交付前体检明细")]),
             tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.documentChecklistFileName)", "document_checklist", loc("施工资料清单")]),
             tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.currentDrawingRegisterFileName)", "current_drawing_register", loc("当前版图纸清单")]),
             tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.drawingMissingCheckFileName)", "drawing_missing_check", loc("缺失图纸检查")]),
             tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.openDrawingIssuesFileName)", "open_drawing_issues", loc("未关闭图纸问题")]),
-            tsv(["\(documentDirectory)/", "source_documents", loc("票据/资料原始文件")]),
-            tsv(["\(drawingDirectory)/", "source_drawings", loc("图纸原始文件")]),
-            tsv(["\(photoDirectory)/", "source_site_photos", loc("日志和整改照片文件")]),
-            tsv(["\(quickNoteDirectory)/", "quick_notes", loc("随手记清单和原始附件")]),
-            tsv(["\(contactDirectory)/", "contacts", loc("联系人清单")])
+            tsv(["\(ProjectPackageSchema.documentDirectory)/", "source_documents", loc("票据/资料原始文件")]),
+            tsv(["\(ProjectPackageSchema.drawingDirectory)/", "source_drawings", loc("图纸原始文件")]),
+            tsv(["\(ProjectPackageSchema.photoDirectory)/", "source_site_photos", loc("日志和整改照片文件")]),
+            tsv(["\(ProjectPackageSchema.quickNoteDirectory)/", "quick_notes", loc("随手记清单和原始附件")]),
+            tsv(["\(ProjectPackageSchema.contactDirectory)/", "contacts", loc("联系人清单")])
         ].joined(separator: "\n")
-        try failIfCancelled()
-        try addGeneratedFileToProjectPackageZip(
-            zip: &zip,
-            data: Data(readme.utf8),
-            path: "\(folder)/\(ProjectPackageSchema.readmeFileName)",
-            stagedRawBytes: &stagedRawBytes
-        )
-        reportProgress(loc("写入说明文件"))
+    }
 
+    private static func writeProjectPackageGeneratedReports(
+        zip: inout StreamingZipArchiveWriter,
+        stagedRawBytes: inout Int,
+        context: ProjectPackageStageContext,
+        packagePDF: Data,
+        logs: [DailyLog],
+        drawings: [ProjectDrawing],
+        contacts: [ProjectContact],
+        financialRecords: [ProjectFinancialRecord],
+        documents: [ProjectDocument],
+        todos: [SiteTodo],
+        quickNotes: [QuickNote]
+    ) throws {
+        let folder = context.folder
+        let deliveryDirectory = ProjectPackageSchema.deliveryDirectory
+        let pdfName = ProjectPackageSchema.pdfFileName(folder: folder)
+        let deliveryHealth = projectDeliveryHealthReport(
+            financialRecords: financialRecords,
+            documents: documents,
+            drawings: drawings,
+            todos: todos,
+            logs: logs,
+            quickNotes: quickNotes
+        )
+        let documentChecklist = DocumentArchiveChecklistSnapshot(
+            documents: documents,
+            requiredCategories: context.project.requiredDocumentCategories
+        )
+        let preDeliveryInspection = projectPreDeliveryInspectionTSVText(
+            project: context.project,
+            financialRecords: financialRecords,
+            documents: documents,
+            drawings: drawings,
+            todos: todos,
+            logs: logs,
+            quickNotes: quickNotes,
+            backupState: deliveryHealth.backupState
+        )
+        let readme = makeProjectPackageReadmeText(
+            project: context.project,
+            deliveryHealth: deliveryHealth,
+            documentChecklist: documentChecklist,
+            drawings: drawings,
+            todos: todos,
+            pdfName: pdfName
+        )
         let checklist = projectDeliveryChecklistText(
-            project: project,
+            project: context.project,
             logs: logs,
             drawings: drawings,
             contacts: contacts,
@@ -208,145 +269,56 @@ extension ReportBuilder {
             todos: todos,
             quickNotes: quickNotes
         )
-        try failIfCancelled()
-        try addGeneratedFileToProjectPackageZip(
-            zip: &zip,
-            data: Data(checklist.utf8),
-            path: "\(folder)/\(deliveryDirectory)/\(checklistFileName)",
-            stagedRawBytes: &stagedRawBytes
-        )
-        reportProgress(loc("写入交付检查清单"))
+        let entries: [(path: String, data: Data, label: String)] = [
+            ("\(folder)/\(deliveryDirectory)/\(pdfName)", packagePDF, loc("写入交付包 PDF")),
+            ("\(folder)/\(ProjectPackageSchema.readmeFileName)", Data(readme.utf8), loc("写入说明文件")),
+            ("\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.checklistFileName)", Data(checklist.utf8), loc("写入交付检查清单")),
+            ("\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.preDeliveryInspectionFileName)", Data(preDeliveryInspection.utf8), loc("写入交付前体检明细")),
+            ("\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.documentChecklistFileName)", Data(projectDocumentChecklistTSVText(documentChecklist).utf8), loc("写入施工资料清单")),
+            ("\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.currentDrawingRegisterFileName)", Data(projectCurrentDrawingRegisterTSVText(drawings).utf8), loc("写入当前版图纸清单")),
+            ("\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.drawingMissingCheckFileName)", Data(projectDrawingMissingCheckTSVText(drawings).utf8), loc("写入缺失图纸检查")),
+            ("\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.openDrawingIssuesFileName)", Data(projectOpenDrawingIssuesTSVText(drawings: drawings, todos: todos).utf8), loc("写入未关闭图纸问题"))
+        ]
+        for entry in entries {
+            try context.failIfCancelled()
+            try addGeneratedFileToProjectPackageZip(zip: &zip, data: entry.data, path: entry.path, stagedRawBytes: &stagedRawBytes)
+            context.reportProgress(entry.label)
+        }
+    }
 
-        try failIfCancelled()
-        try addGeneratedFileToProjectPackageZip(
-            zip: &zip,
-            data: Data(preDeliveryInspection.utf8),
-            path: "\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.preDeliveryInspectionFileName)",
-            stagedRawBytes: &stagedRawBytes
-        )
-        reportProgress(loc("写入交付前体检明细"))
-
-        try failIfCancelled()
-        try addGeneratedFileToProjectPackageZip(
-            zip: &zip,
-            data: Data(projectDocumentChecklistTSVText(documentChecklist).utf8),
-            path: "\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.documentChecklistFileName)",
-            stagedRawBytes: &stagedRawBytes
-        )
-        reportProgress(loc("写入施工资料清单"))
-
-        try failIfCancelled()
-        try addGeneratedFileToProjectPackageZip(
-            zip: &zip,
-            data: Data(projectCurrentDrawingRegisterTSVText(drawings).utf8),
-            path: "\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.currentDrawingRegisterFileName)",
-            stagedRawBytes: &stagedRawBytes
-        )
-        reportProgress(loc("写入当前版图纸清单"))
-
-        try failIfCancelled()
-        try addGeneratedFileToProjectPackageZip(
-            zip: &zip,
-            data: Data(projectDrawingMissingCheckTSVText(drawings).utf8),
-            path: "\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.drawingMissingCheckFileName)",
-            stagedRawBytes: &stagedRawBytes
-        )
-        reportProgress(loc("写入缺失图纸检查"))
-
-        try failIfCancelled()
-        try addGeneratedFileToProjectPackageZip(
-            zip: &zip,
-            data: Data(projectOpenDrawingIssuesTSVText(drawings: drawings, todos: todos).utf8),
-            path: "\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.openDrawingIssuesFileName)",
-            stagedRawBytes: &stagedRawBytes
-        )
-        reportProgress(loc("写入未关闭图纸问题"))
-
-        for document in documents {
-            try failIfCancelled()
-            let fileBytes = ProjectDocumentStorage.fileSize(for: document.fileName)
-            let sourceURL = ProjectDocumentStorage.fileURL(for: document.fileName)
+    private static func writeProjectPackageStoredAssets(
+        zip: inout StreamingZipArchiveWriter,
+        stagedRawBytes: inout Int,
+        context: ProjectPackageStageContext,
+        references: [ProjectPackageSourceReference]
+    ) throws {
+        for reference in references {
+            try context.failIfCancelled()
+            let sourceURL = try reference.validatedFileURL()
             guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                recordPackageIssue(
-                    "project_package.missing_original_file",
-                    details: [
-                        "asset_type": "project_document",
-                        "file_name": document.fileName,
-                        "item_title": document.title
-                    ]
-                )
-                reportProgress(locFormat("检查票据 %@", document.title))
+                context.recordPackageIssue("project_package.missing_original_file", reference.issueDetails, nil)
+                context.reportProgress(reference.checkProgress)
                 continue
             }
-            let title = safeZipName(document.title)
-            let fileName = document.fileName.lowercased().hasSuffix(".pdf") ? document.fileName : "\(document.fileName).pdf"
             try addStoredFileToProjectPackageZip(
                 zip: &zip,
                 sourceFileURL: sourceURL,
-                fileBytes: fileBytes,
-                path: "\(folder)/\(documentDirectory)/\(title)-\(fileName)",
+                fileBytes: reference.fileBytes,
+                path: "\(context.folder)/\(reference.archivePath)",
                 stagedRawBytes: &stagedRawBytes
             )
-            reportProgress(locFormat("打包票据 %@", document.title))
+            context.reportProgress(reference.writeProgress)
         }
+    }
 
-        for drawing in drawings {
-            try failIfCancelled()
-            let fileBytes = DrawingStorage.fileSize(for: drawing.fileName)
-            let sourceURL = DrawingStorage.fileURL(for: drawing.fileName)
-            guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                recordPackageIssue(
-                    "project_package.missing_original_file",
-                    details: [
-                        "asset_type": "project_drawing",
-                        "file_name": drawing.fileName,
-                        "item_title": drawing.name
-                    ]
-                )
-                reportProgress(locFormat("检查图纸 %@", drawing.name))
-                continue
-            }
-            let name = safeZipName(drawing.name)
-            try addStoredFileToProjectPackageZip(
-                zip: &zip,
-                sourceFileURL: sourceURL,
-                fileBytes: fileBytes,
-                path: "\(folder)/\(drawingDirectory)/\(name)-\(drawing.fileName)",
-                stagedRawBytes: &stagedRawBytes
-            )
-            reportProgress(locFormat("打包图纸 %@", drawing.name))
-        }
-
-        for log in logs {
-            for photo in log.photoAttachments {
-                try failIfCancelled()
-                let fileBytes = PhotoStorage.fileSize(for: photo.fileName)
-                let sourceURL = PhotoStorage.fileURL(for: photo.fileName)
-                guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                    recordPackageIssue(
-                        "project_package.missing_original_file",
-                        details: [
-                            "asset_type": "daily_log_photo",
-                            "file_name": photo.fileName,
-                            "log_date": log.date.storageText,
-                            "photo_tag": photo.tag.displayName
-                        ]
-                    )
-                    reportProgress(locFormat("检查照片 %@ %@", log.date.storageText, photo.tag.displayName))
-                    continue
-                }
-                let tag = safeZipName(photo.tag.displayName)
-                try addStoredFileToProjectPackageZip(
-                    zip: &zip,
-                    sourceFileURL: sourceURL,
-                    fileBytes: fileBytes,
-                    path: "\(folder)/\(photoDirectory)/\(log.date)-\(tag)-\(photo.fileName)",
-                    stagedRawBytes: &stagedRawBytes
-                )
-                reportProgress(locFormat("打包照片 %@ %@", log.date.storageText, photo.tag.displayName))
-            }
-        }
-
+    private static func writeProjectPackageQuickNotesAndContacts(
+        zip: inout StreamingZipArchiveWriter,
+        stagedRawBytes: inout Int,
+        context: ProjectPackageStageContext,
+        quickNotes: [QuickNote],
+        contacts: [ProjectContact]
+    ) throws {
+        let folder = context.folder
         if !quickNotes.isEmpty {
             let header = tsv(["created_at", "content", "attachment_summary_raw", "attachment_summary_display"])
             let lines = quickNotes.sorted(by: { $0.createdAt > $1.createdAt }).map { note in
@@ -357,40 +329,10 @@ extension ReportBuilder {
             try addGeneratedFileToProjectPackageZip(
                 zip: &zip,
                 data: Data(([header] + lines).joined(separator: "\n").utf8),
-                path: "\(folder)/\(quickNoteDirectory)/\(ProjectPackageSchema.quickNotesFileName)",
+                path: "\(folder)/\(ProjectPackageSchema.quickNoteDirectory)/\(ProjectPackageSchema.quickNotesFileName)",
                 stagedRawBytes: &stagedRawBytes
             )
-            reportProgress(loc("写入随手记清单"))
-            for note in quickNotes {
-                for attachment in note.attachments {
-                    try failIfCancelled()
-                    let fileBytes = QuickNoteAttachmentStorage.fileSize(for: attachment.fileName)
-                    let sourceURL = QuickNoteAttachmentStorage.fileURL(for: attachment.fileName)
-                    guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                        recordPackageIssue(
-                            "project_package.missing_original_file",
-                            details: [
-                                "asset_type": "quick_note_attachment",
-                                "file_name": attachment.fileName,
-                                "item_title": note.title
-                            ]
-                        )
-                        reportProgress(locFormat("检查随手记附件 %@", note.title.isEmpty ? Formatters.displayDateText(note.createdAt) : note.title))
-                        continue
-                    }
-                    let title = safeZipName(note.title, fallback: "quick_note")
-                    let kind = attachment.attachmentKind.rawValue
-                    let created = safeZipName(Formatters.displayDateText(note.createdAt))
-                    try addStoredFileToProjectPackageZip(
-                        zip: &zip,
-                        sourceFileURL: sourceURL,
-                        fileBytes: fileBytes,
-                        path: "\(folder)/\(quickNoteDirectory)/\(kind)/\(created)-\(title)-\(attachment.fileName)",
-                        stagedRawBytes: &stagedRawBytes
-                    )
-                    reportProgress(locFormat("打包随手记附件 %@", note.title.isEmpty ? Formatters.displayDateText(note.createdAt) : note.title))
-                }
-            }
+            context.reportProgress(loc("写入随手记清单"))
         }
 
         if !contacts.isEmpty {
@@ -401,14 +343,10 @@ extension ReportBuilder {
             try addGeneratedFileToProjectPackageZip(
                 zip: &zip,
                 data: Data(([header] + rows).joined(separator: "\n").utf8),
-                path: "\(folder)/\(contactDirectory)/\(ProjectPackageSchema.contactsFileName)",
+                path: "\(folder)/\(ProjectPackageSchema.contactDirectory)/\(ProjectPackageSchema.contactsFileName)",
                 stagedRawBytes: &stagedRawBytes
             )
-            reportProgress(loc("写入联系人清单"))
+            context.reportProgress(loc("写入联系人清单"))
         }
-
-        let finishedURL = try zip.finish()
-        writerFinished = true
-        return finishedURL
     }
 }

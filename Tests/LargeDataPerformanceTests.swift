@@ -55,22 +55,10 @@ struct LargeDataPerformanceTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let actor = DataStorePersistenceActor(storeURL: directory.appendingPathComponent("store.json"))
-        let snapshot = makeSnapshot(projectName: "相同内容")
+        let snapshot = TestFixtures.projectSnapshot(projectName: "相同内容")
 
         #expect(try await actor.persist(snapshot: snapshot))
         #expect(try await !actor.persist(snapshot: snapshot))
-        #expect(try await actor.persist(snapshot: makeSnapshot(projectName: "更新内容")))
-    }
-
-    private func makeSnapshot(projectName: String) -> BackupSnapshot {
-        BackupSnapshot(
-            materialItems: [],
-            quoteItems: [],
-            laborRecords: [],
-            projects: [Project(name: projectName, location: "", status: .active)],
-            dailyLogs: [],
-            historyRecords: [],
-            templates: []
-        )
+        #expect(try await actor.persist(snapshot: TestFixtures.projectSnapshot(projectName: "更新内容")))
     }
 }

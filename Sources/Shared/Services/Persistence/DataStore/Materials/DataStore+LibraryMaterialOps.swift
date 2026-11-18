@@ -128,5 +128,4 @@ extension DataStore {
             recordsAuditImmediately: recordsAuditImmediately
         )
     }
-
 }

@@ -15,11 +15,29 @@ extension LaborRecordView {
     }
 
     var savedTeams: [String] {
-        savedTeamsRaw.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        Self.decodeSavedList(savedTeamsRaw)
     }
 
     var savedWorkTypes: [String] {
-        savedWorkTypesRaw.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        Self.decodeSavedList(savedWorkTypesRaw)
+    }
+
+    static func decodeSavedList(_ raw: String) -> [String] {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("["),
+           let data = trimmed.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode([String].self, from: data) {
+            return decoded.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        }
+        return raw.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
+
+    static func encodeSavedList(_ items: [String]) -> String {
+        guard let data = try? JSONEncoder().encode(items),
+              let text = String(data: data, encoding: .utf8) else {
+            return items.joined(separator: ",")
+        }
+        return text
     }
 
     var totalWorkdays: QuantityValue {

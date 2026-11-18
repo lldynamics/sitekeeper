@@ -171,12 +171,16 @@ enum SyntheticSampleFixtureBuilder {
                                sourceID: "synth-method-\(i)", sourceURL: "https://fixture.example.invalid/methods/\(i)",
                                sourceVersion: recipeVersion, sourceUpdatedAt: day, updatedAt: day)
         }
+        let history = [HistoryRecord(id: identifier(17, 1), tool: label("计算", 1), input: "2 × 3",
+                                     result: "6", date: day, projectId: project(1))]
+        let templates = [ProjectTemplate(id: identifier(19, 1), name: label("日志模板", 1),
+                                         category: .dailyLog, content: "人工日志模板示例")]
         return BackupSnapshot(
             schemaVersion: BackupSnapshot.currentSchemaVersion, appVersion: recipeVersion, appBuild: "0",
             backupCreatedAt: "2042-03-04T05:06:07Z", materialItems: materials, quoteItems: quotes, laborRecords: labor,
-            projects: projects, dailyLogs: logs, historyRecords: [], progressTasks: tasks, siteTodos: todos,
+            projects: projects, dailyLogs: logs, historyRecords: history, progressTasks: tasks, siteTodos: todos,
             projectDrawings: drawings, projectContacts: contacts, projectFinancialRecords: financial,
-            projectDocuments: documents, quickNotes: notes, projectWarehouseMovements: movements, templates: [],
+            projectDocuments: documents, quickNotes: notes, projectWarehouseMovements: movements, templates: templates,
             materialPriceEntries: prices, materialSheetDrafts: drafts, supplierProfiles: suppliers,
             constructionMethods: methods, favoriteMaterialKeys: [], recentMaterialKeys: [], userMaterials: [],
             deletedUserMaterials: [], hiddenPresetKeys: [], photoFiles: photoFiles, drawingFiles: drawingFiles,
@@ -212,7 +216,8 @@ enum SyntheticSampleFixtureBuilder {
         var compressed: [UInt8] = [0x78, 0x01, 0x01, UInt8(truncatingIfNeeded: count), UInt8(count >> 8),
                                    UInt8(truncatingIfNeeded: complement), UInt8(complement >> 8)] + raw
         var a: UInt32 = 1, b: UInt32 = 0
-        for byte in raw { a = (a + UInt32(byte)) % 65521; b = (b + a) % 65521 }
+        for byte in raw { a = (a + UInt32(byte)) % 65521
+        b = (b + a) % 65521 }
         compressed += word((b << 16) | a)
         return Data([137,80,78,71,13,10,26,10] + chunk("IHDR", word(8) + word(8) + [8,6,0,0,0])
                     + chunk("IDAT", compressed) + chunk("IEND", []))

@@ -358,7 +358,7 @@ struct MaterialSheetRenameDraftSheet: View {
                 messages: titleIsEmpty ? [AppLocalization.string("请填写材料单名称")] : []
             )
             Section(AppLocalization.string("材料单名称")) {
-                TextField(AppLocalization.string("材料单名称"), text: $renameTitleInput)
+                TextField(AppLocalization.string("材料单名称"), text: $renameTitleInput, prompt: Text(verbatim: ""))
             }
         }
     }

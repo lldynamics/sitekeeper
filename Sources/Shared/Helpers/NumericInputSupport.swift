@@ -218,11 +218,6 @@ enum NumericInputSupport {
         )
     }
 
-    static func decimalValueIfPresent(_ text: String, kind: NumericInputKind) -> Decimal? {
-        let validation = validate(text, kind: kind, requirement: .optionalNonNegative)
-        return validation.decimalValue
-    }
-
     static func normalizedStorageText(
         _ text: String,
         kind: NumericInputKind,

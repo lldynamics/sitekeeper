@@ -139,46 +139,59 @@ struct ProjectActivityIncrementalIndexTests {
             switch step % 8 {
             case 0:
                 store.setDailyLogs(mutated(store.dailyLogs, appending: log(id, day: text), random: &random) {
-                    $0.projectId = step % 3 == 0 ? nil : id; $0.date = date(text)
+                    $0.projectId = step % 3 == 0 ? nil : id
+                    $0.date = date(text)
                 })
             case 1:
                 let task = ProgressTask(projectId: id, title: "Task", startDate: date(text), dueDate: date(text), completion: 0, note: "")
                 store.setProgressTasks(mutated(store.progressTasks, appending: task, random: &random) {
-                    $0.projectId = id; $0.dueDate = date(text); $0.completion = step % 3 == 0 ? 1 : 0.5
+                    $0.projectId = id
+                    $0.dueDate = date(text)
+                    $0.completion = step % 3 == 0 ? 1 : 0.5
                 })
             case 2:
                 store.setSiteTodos(mutated(store.siteTodos, appending: SiteTodo(title: "Todo", dueDate: date(text), projectId: id), random: &random) {
-                    $0.projectId = step % 3 == 0 ? nil : id; $0.dueDate = date(text); $0.isDone.toggle()
+                    $0.projectId = step % 3 == 0 ? nil : id
+                    $0.dueDate = date(text)
+                    $0.isDone.toggle()
                 })
             case 3:
                 let linkedID = store.projectFinancialRecords.first?.id
                 let doc = ProjectDocument(projectId: id, title: "Doc", fileName: "doc.pdf", linkedFinancialRecordId: linkedID, createdAt: date(text))
                 store.setProjectDocuments(mutated(store.projectDocuments, appending: doc, random: &random) {
-                    $0.projectId = id; $0.createdAt = date(text); $0.linkedFinancialRecordId = step % 3 == 0 ? nil : linkedID
+                    $0.projectId = id
+                    $0.createdAt = date(text)
+                    $0.linkedFinancialRecordId = step % 3 == 0 ? nil : linkedID
                 })
             case 4:
                 let drawing = ProjectDrawing(projectId: id, name: "Drawing", fileName: "drawing.pdf", fileType: "pdf", importedAt: date(text))
                 store.setProjectDrawings(mutated(store.projectDrawings, appending: drawing, random: &random) {
-                    $0.projectId = id; $0.importedAt = date(text)
+                    $0.projectId = id
+                    $0.importedAt = date(text)
                 })
             case 5:
                 let record = ProjectFinancialRecord(projectId: id, date: date(text), amount: 5)
                 store.setProjectFinancialRecords(mutated(store.projectFinancialRecords, appending: record, random: &random) {
-                    $0.projectId = id; $0.date = date(text); $0.amount = MoneyValue(Decimal(step))
+                    $0.projectId = id
+                    $0.date = date(text)
+                    $0.amount = MoneyValue(Decimal(step))
                     $0.direction = step % 3 == 0 ? .income : .expense
                     $0.category = step % 3 == 0 ? .collection : .material
                     $0.status = step % 3 == 0 ? .archived : .active
-                    $0.dueDate = date(text); $0.linkedDocumentIds = step % 3 == 0 ? [UUID()] : []
+                    $0.dueDate = date(text)
+                    $0.linkedDocumentIds = step % 3 == 0 ? [UUID()] : []
                 })
             case 6:
                 let movement = ProjectWarehouseMovement(projectId: id, date: date(text))
                 store.setProjectWarehouseMovements(mutated(store.projectWarehouseMovements, appending: movement, random: &random) {
-                    $0.projectId = id; $0.date = date(text)
+                    $0.projectId = id
+                    $0.date = date(text)
                 })
             default:
                 let note = QuickNote(projectId: id, createdAt: date(text))
                 store.setQuickNotes(mutated(store.quickNotes, appending: note, random: &random) {
-                    $0.projectId = step % 3 == 0 ? nil : id; $0.createdAt = date(text)
+                    $0.projectId = step % 3 == 0 ? nil : id
+                    $0.createdAt = date(text)
                 })
             }
             assertMatchesFullBuild(store)
