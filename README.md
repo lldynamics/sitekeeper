@@ -2,13 +2,37 @@
 
 A SwiftUI toolbox for construction-site calculation, project records, quoting, daily logs, progress tracking, backup, and export.
 
-Minimum OS: iOS 17.0+ / iPadOS 17.0+ (uses Swift Observation APIs).
+Requires iOS 17.0+ / iPadOS 17.0+.
 
-Chinese guide: `README.zh-CN.md`
+English | [简体中文](README.zh-CN.md)
 
 This repository is available for source inspection with rights reserved; it is
 not offered under an open-source license. See [COPYRIGHT.md](COPYRIGHT.md) and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Download
+
+Install **工地掌柜** for iPhone or iPad from the [App Store (United States)](https://apps.apple.com/us/app/%E5%B7%A5%E5%9C%B0%E6%8E%8C%E6%9F%9C/id6766023111?uo=4) or the [Hong Kong storefront](https://apps.apple.com/hk/app/%E5%B7%A5%E5%9C%B0%E6%8E%8C%E6%9F%9C/id6766023111?uo=4). Requires iOS 17.0 or iPadOS 17.0 or later. No app account or registration is required.
+
+**Regional availability — 30 October 2026:** version 1.0.4 is listed in the US and Hong Kong storefronts. It is currently unavailable in the mainland China App Store while the required ICP filing information is incomplete. Availability depends on your Apple Account's storefront; check its App Store listing before downloading.
+
+## Get started in 3 steps
+
+1. **Create a project.** Open **Projects → New Project**, enter the project name, add other details as needed, and select **Create**.
+2. **Save your first record.** Open the project and choose **Add Record → New Transaction** to record income or an expense. Use **New Material** or **Write Daily Log** for materials and site notes.
+3. **Preview and share.** Open **More Actions → Site reports and checks → Daily and weekly site reports → Preview text PDF**. Review the project, dates and content, then choose whether to share.
+
+**Keep a backup:** open **My Profile → Data Management → Backup & Restore** and choose **Export Full Backup ZIP** under **Local Backup**. On iPad, a **Create Local Backup ZIP** shortcut is also available. Records are stored locally by default. Optional iCloud backup and restore is for your own Apple ID; it is not real-time team collaboration.
+
+## What's improved in 1.0.4
+
+- Clearer project income, expenses, outstanding payments, and material and labor cost figures, with calculation notes and review prompts.
+- Refined quotation filters, totals, and amount explanations in exported PDFs.
+- Improved field navigation and cancellation with the iPad floating keyboard.
+- Better filtering and position retention in to-do and progress lists on iPhone and iPad.
+- Selecting **Cost** again now returns to that section after manually scrolling an iPad project detail page.
+
+See the [App Store version history](https://apps.apple.com/us/app/%E5%B7%A5%E5%9C%B0%E6%8E%8C%E6%9F%9C/id6766023111?uo=4) for the published release notes. The source-build instructions below are for developers.
 
 ## Current Features
 
@@ -29,7 +53,7 @@ not offered under an open-source license. See [COPYRIGHT.md](COPYRIGHT.md) and
 - Quote generation requires an explicit material pricing choice: use the stored material price as a cost reference, set one customer-facing price, or leave prices blank for later. Writing a quote into a project contract first shows the selected confirmed quote version and calculated amount; if the source quote changes, the preview refreshes and must be confirmed again.
 - Older labor records whose unit cannot be determined are marked for confirmation instead of treating their values as hours or workdays automatically. They must be edited or batch-confirmed before quote generation; confirmation assigns the unit without converting the saved quantity or amount.
 
-## Quick Start
+## Build from source (developers)
 
 1. Use Xcode 27.1 (the same version checked by CI and release preflight):
 
